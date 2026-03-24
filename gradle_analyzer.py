@@ -383,6 +383,93 @@ class GradleDependencyAnalyzer:
         
         return "\n".join(lines)
     
+    def find_cycles(self) -> list:
+        """Detecta ciclos en el grafo de dependencias usando DFS (colores WHITE/GRAY/BLACK).
+        Retorna una lista de ciclos, cada uno como lista de nombres de módulos."""
+        WHITE, GRAY, BLACK = 0, 1, 2
+        color = {m: WHITE for m in self.modules}
+        parent = {}
+        cycles = []
+
+        def dfs(node, stack):
+            color[node] = GRAY
+            stack.append(node)
+            for neighbor in self.dependencies.get(node, set()):
+                if neighbor not in color:
+                    continue
+                if color[neighbor] == GRAY:
+                    # Encontramos un back-edge → ciclo
+                    cycle_start = stack.index(neighbor)
+                    cycle = stack[cycle_start:]
+                    if cycle not in cycles:
+                        cycles.append(list(cycle))
+                elif color[neighbor] == WHITE:
+                    parent[neighbor] = node
+                    dfs(neighbor, stack)
+            stack.pop()
+            color[node] = BLACK
+
+        for module in self.modules:
+            if color[module] == WHITE:
+                dfs(module, [])
+
+        return cycles
+
+    def generate_cycle_diagram(self) -> str:
+        """Genera un diagrama Mermaid resaltando en rojo los módulos involucrados en ciclos."""
+        cycles = self.find_cycles()
+
+        lines = ["graph TD", ""]
+
+        if not cycles:
+            lines.append('  no_cycles["✅ Sin dependencias circulares"]')
+            return "\n".join(lines)
+
+        # Nodos en ciclos
+        cycle_nodes = set()
+        cycle_edges = set()
+        for cycle in cycles:
+            for node in cycle:
+                cycle_nodes.add(node)
+            for i in range(len(cycle)):
+                src = cycle[i]
+                dst = cycle[(i + 1) % len(cycle)]
+                cycle_edges.add((src, dst))
+
+        # Nodos
+        for module in sorted(self.modules):
+            module_id = module.replace('-', '_').replace(':', '_')
+            if module in cycle_nodes:
+                lines.append(f'  {module_id}["⚠️ {module}"]')
+            else:
+                lines.append(f'  {module_id}["{module}"]')
+
+        lines.append("")
+        lines.append("  %% Todas las dependencias")
+        for from_module in sorted(self.dependencies.keys()):
+            from_id = from_module.replace('-', '_').replace(':', '_')
+            for to_module in sorted(self.dependencies[from_module]):
+                to_id = to_module.replace('-', '_').replace(':', '_')
+                if (from_module, to_module) in cycle_edges:
+                    lines.append(f"  {from_id} -->|🔴 ciclo| {to_id}")
+                else:
+                    lines.append(f"  {from_id} -.-> {to_id}")
+
+        lines.append("")
+        lines.append("  classDef cycleStyle fill:#FFCDD2,stroke:#C62828,stroke-width:3px,color:#B71C1C")
+        cycle_ids = ",".join(
+            m.replace('-', '_').replace(':', '_') for m in sorted(cycle_nodes)
+        )
+        if cycle_ids:
+            lines.append(f"  class {cycle_ids} cycleStyle")
+
+        lines.append("")
+        lines.append(f"  %% Ciclos detectados: {len(cycles)}")
+        for i, cycle in enumerate(cycles, 1):
+            lines.append(f"  %% Ciclo {i}: {' → '.join(cycle)} → {cycle[0]}")
+
+        return "\n".join(lines)
+
     def generate_matrix(self) -> str:
         """Genera una matriz de dependencias (DSM) en formato ASCII.
         Filas = módulo dependiente, Columnas = módulo del que depende.
@@ -454,6 +541,14 @@ class GradleDependencyAnalyzer:
         with open(matrix_file, 'w', encoding='utf-8') as f:
             f.write(self.generate_matrix())
         print(f"✓ Matriz: {matrix_file}")
+
+        # Diagrama de ciclos
+        cycles_file = output_path / "cycle-diagram.mmd"
+        with open(cycles_file, 'w', encoding='utf-8') as f:
+            f.write(self.generate_cycle_diagram())
+        cycles = self.find_cycles()
+        status = f"{len(cycles)} ciclo(s) detectado(s)" if cycles else "sin ciclos"
+        print(f"✓ Ciclos: {cycles_file} ({status})")
 
 
 def main():
