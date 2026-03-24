@@ -536,6 +536,134 @@ class GradleDependencyAnalyzer:
 
         return "\n".join(lines)
 
+    # Keywords estructurales universales para etiquetar capas semánticamente
+    _FOUNDATION_KEYWORDS = {'core', 'common', 'base', 'util', 'utils', 'shared'}
+    _APP_KEYWORDS = {'app'}
+
+    def _layer_label(self, module: str) -> str:
+        """Retorna una etiqueta semántica si el módulo coincide con keywords universales.
+        'feature:core' → Foundation (core tiene precedencia sobre cualquier otra cosa).
+        ':app' → App. El resto no recibe etiqueta semántica."""
+        parts = set(module.lower().split(':'))
+        if parts & self._FOUNDATION_KEYWORDS:
+            return 'Foundation'
+        if parts & self._APP_KEYWORDS:
+            return 'App'
+        return ''
+
+    def topological_layers(self) -> dict:
+        """Asigna un número de capa a cada módulo.
+        Capa 0 = Foundation (módulos sin dependencias internas).
+        Capas mayores = módulos que dependen de capas inferiores.
+        Módulos en ciclos quedan en -1.
+
+        Algoritmo: BFS sobre el grafo INVERSO partiendo de los nodos hoja
+        (módulos que nadie más usa como dependencia directa no es el criterio;
+        usamos out-degree=0 en el grafo original, es decir sin dependencias)."""
+        # out_degree: cantidad de dependencias internas que tiene cada módulo
+        out_degree = {m: len(self.dependencies.get(m, set())) for m in self.modules}
+
+        # Construir grafo inverso: dep -> [módulos que dependen de dep]
+        reverse = defaultdict(set)
+        for module, deps in self.dependencies.items():
+            for dep in deps:
+                if dep in out_degree:
+                    reverse[dep].add(module)
+
+        # Capa 0 = módulos sin dependencias internas (Foundation)
+        queue = [m for m, d in out_degree.items() if d == 0]
+        layer = {m: 0 for m in queue}
+        remaining_out = dict(out_degree)
+
+        while queue:
+            current = queue.pop(0)
+            for caller in reverse.get(current, set()):
+                remaining_out[caller] -= 1
+                candidate = layer[current] + 1
+                layer[caller] = max(layer.get(caller, 0), candidate)
+                if remaining_out[caller] == 0:
+                    queue.append(caller)
+
+        # Módulos no visitados están en ciclos → capa -1
+        for m in self.modules:
+            if m not in layer:
+                layer[m] = -1
+
+        return layer
+
+    def generate_layers_diagram(self) -> str:
+        """Genera un diagrama Mermaid TD con subgraphs por capa arquitectónica.
+        La posición de cada módulo es determinada por topological sort.
+        Las etiquetas 'Foundation' y 'App' se aplican solo cuando el nombre
+        del módulo contiene keywords universales no ambiguas."""
+        layer_map = self.topological_layers()
+
+        # Agrupar módulos por capa
+        layers = defaultdict(list)
+        for module, lyr in layer_map.items():
+            layers[lyr].append(module)
+
+        lines = ["graph TD", ""]
+
+        # Subgraphs por capa (de menor a mayor)
+        for lyr in sorted(layers.keys()):
+            modules_in_layer = sorted(layers[lyr])
+
+            if lyr == -1:
+                label = "Layer ⚠️ (ciclos)"
+            else:
+                semantic = ""
+                # Etiqueta semántica del subgraph si TODOS o la mayoría coinciden
+                labels = [self._layer_label(m) for m in modules_in_layer]
+                unique_labels = {l for l in labels if l}
+                if len(unique_labels) == 1:
+                    semantic = f" · {unique_labels.pop()}"
+                label = f"Layer {lyr}{semantic}"
+
+            subgraph_id = f"L{lyr if lyr >= 0 else 'cycle'}"
+            lines.append(f'  subgraph {subgraph_id}["{label}"]')
+            for module in modules_in_layer:
+                module_id = module.replace('-', '_').replace(':', '_')
+                semantic_label = self._layer_label(module)
+                icon = "🏗️" if semantic_label == 'Foundation' else ("📱" if semantic_label == 'App' else "📦")
+                lines.append(f'    {module_id}["{icon} {module}"]')
+            lines.append("  end")
+            lines.append("")
+
+        lines.append("  %% Dependencias entre capas")
+        for from_module in sorted(self.dependencies.keys()):
+            from_id = from_module.replace('-', '_').replace(':', '_')
+            for to_module in sorted(self.dependencies[from_module]):
+                to_id = to_module.replace('-', '_').replace(':', '_')
+                lines.append(f"  {from_id} -.-> {to_id}")
+
+        lines.append("")
+        lines.append("  classDef foundationStyle fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px")
+        lines.append("  classDef appStyle fill:#E3F2FD,stroke:#1565C0,stroke-width:2px")
+        lines.append("  classDef cycleStyle fill:#FFCDD2,stroke:#C62828,stroke-width:2px")
+
+        foundation_ids = ",".join(
+            m.replace('-', '_').replace(':', '_')
+            for m in self.modules if self._layer_label(m) == 'Foundation'
+        )
+        app_ids = ",".join(
+            m.replace('-', '_').replace(':', '_')
+            for m in self.modules if self._layer_label(m) == 'App'
+        )
+        cycle_ids = ",".join(
+            m.replace('-', '_').replace(':', '_')
+            for m, l in layer_map.items() if l == -1
+        )
+
+        if foundation_ids:
+            lines.append(f"  class {foundation_ids} foundationStyle")
+        if app_ids:
+            lines.append(f"  class {app_ids} appStyle")
+        if cycle_ids:
+            lines.append(f"  class {cycle_ids} cycleStyle")
+
+        return "\n".join(lines)
+
     def generate_matrix(self) -> str:
         """Genera una matriz de dependencias (DSM) en formato ASCII.
         Filas = módulo dependiente, Columnas = módulo del que depende.
@@ -615,6 +743,13 @@ class GradleDependencyAnalyzer:
         cycles = self.find_cycles()
         status = f"{len(cycles)} ciclo(s) detectado(s)" if cycles else "sin ciclos"
         print(f"✓ Ciclos: {cycles_file} ({status})")
+
+        # Diagrama de capas arquitectónicas
+        layers_file = output_path / "layers-diagram.mmd"
+        with open(layers_file, 'w', encoding='utf-8') as f:
+            f.write(self.generate_layers_diagram())
+        layer_count = len(set(self.topological_layers().values()))
+        print(f"✓ Capas: {layers_file} ({layer_count} capa(s))")
 
     def save_impact(self, target: str, output_dir="diagrams"):
         """Guarda el diagrama de impacto transitivo para un módulo específico."""
