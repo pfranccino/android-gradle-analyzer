@@ -383,6 +383,49 @@ class GradleDependencyAnalyzer:
         
         return "\n".join(lines)
     
+    def generate_matrix(self) -> str:
+        """Genera una matriz de dependencias (DSM) en formato ASCII.
+        Filas = módulo dependiente, Columnas = módulo del que depende.
+        Una 'X' indica que la fila depende de la columna."""
+        modules = sorted(self.modules)
+        if not modules:
+            return "No hay módulos para mostrar."
+
+        # Etiquetas cortas para las columnas (última parte del path)
+        short = [m.split(':')[-1] for m in modules]
+        col_width = max(len(s) for s in short)
+        row_label_width = max(len(m) for m in modules)
+
+        header = " " * (row_label_width + 2)
+        for s in short:
+            header += s.center(col_width + 1)
+
+        separator = "-" * len(header)
+
+        lines = [
+            "MATRIZ DE DEPENDENCIAS (DSM)",
+            separator,
+            header,
+            separator,
+        ]
+
+        for i, module in enumerate(modules):
+            row = module.ljust(row_label_width) + " |"
+            for j, dep in enumerate(modules):
+                if dep in self.dependencies.get(module, set()):
+                    cell = "X"
+                elif i == j:
+                    cell = "·"
+                else:
+                    cell = " "
+                row += cell.center(col_width + 1)
+            lines.append(row)
+
+        lines.append(separator)
+        lines.append(f"\nTotal módulos: {len(modules)}")
+        lines.append(f"Total dependencias: {sum(len(d) for d in self.dependencies.values())}")
+        return "\n".join(lines)
+
     def save_all(self, output_dir="diagrams"):
         """Guarda todos los archivos generados"""
         output_path = Path(output_dir)
@@ -405,6 +448,12 @@ class GradleDependencyAnalyzer:
         with open(report_file, 'w', encoding='utf-8') as f:
             f.write(self.generate_report())
         print(f"✓ Reporte: {report_file}")
+
+        # Matriz de dependencias
+        matrix_file = output_path / "dependency-matrix.txt"
+        with open(matrix_file, 'w', encoding='utf-8') as f:
+            f.write(self.generate_matrix())
+        print(f"✓ Matriz: {matrix_file}")
 
 
 def main():
