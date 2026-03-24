@@ -470,6 +470,72 @@ class GradleDependencyAnalyzer:
 
         return "\n".join(lines)
 
+    def generate_impact_diagram(self, target: str) -> str:
+        """Genera un diagrama Mermaid mostrando todos los módulos afectados
+        directa e indirectamente si el módulo objetivo cambia (reverse BFS)."""
+        # Construir grafo inverso: quién depende de cada módulo
+        reverse_graph = defaultdict(set)
+        for module, deps in self.dependencies.items():
+            for dep in deps:
+                reverse_graph[dep].add(module)
+
+        if target not in self.modules:
+            return f"graph TD\n  error[\"❌ Módulo '{target}' no encontrado\"]"
+
+        # BFS desde target en el grafo inverso
+        visited = {}  # module -> distancia desde target
+        queue = [(target, 0)]
+        visited[target] = 0
+        while queue:
+            current, dist = queue.pop(0)
+            for caller in reverse_graph.get(current, set()):
+                if caller not in visited:
+                    visited[caller] = dist + 1
+                    queue.append((caller, dist + 1))
+
+        affected = {m for m in visited if m != target}
+
+        lines = [
+            "graph TD",
+            f'  %% Impacto de cambios en: {target}',
+            f'  %% Módulos afectados: {len(affected)}',
+            "",
+        ]
+
+        target_id = target.replace('-', '_').replace(':', '_')
+        lines.append(f'  {target_id}["🎯 {target}"]')
+
+        for module in sorted(self.modules):
+            if module == target:
+                continue
+            module_id = module.replace('-', '_').replace(':', '_')
+            dist = visited.get(module)
+            if dist is not None:
+                lines.append(f'  {module_id}["📦 {module} (d={dist})"]')
+            else:
+                lines.append(f'  {module_id}["{module}"]')
+
+        lines.append("")
+        lines.append("  %% Dependencias directas e indirectas")
+        for from_module in sorted(self.dependencies.keys()):
+            from_id = from_module.replace('-', '_').replace(':', '_')
+            for to_module in sorted(self.dependencies[from_module]):
+                to_id = to_module.replace('-', '_').replace(':', '_')
+                lines.append(f"  {from_id} -.-> {to_id}")
+
+        lines.append("")
+        lines.append("  classDef targetStyle fill:#FFF9C4,stroke:#F57F17,stroke-width:3px")
+        lines.append("  classDef affectedStyle fill:#FFE0B2,stroke:#E65100,stroke-width:2px")
+        lines.append(f"  class {target_id} targetStyle")
+
+        affected_ids = ",".join(
+            m.replace('-', '_').replace(':', '_') for m in sorted(affected)
+        )
+        if affected_ids:
+            lines.append(f"  class {affected_ids} affectedStyle")
+
+        return "\n".join(lines)
+
     def generate_matrix(self) -> str:
         """Genera una matriz de dependencias (DSM) en formato ASCII.
         Filas = módulo dependiente, Columnas = módulo del que depende.
@@ -550,33 +616,55 @@ class GradleDependencyAnalyzer:
         status = f"{len(cycles)} ciclo(s) detectado(s)" if cycles else "sin ciclos"
         print(f"✓ Ciclos: {cycles_file} ({status})")
 
+    def save_impact(self, target: str, output_dir="diagrams"):
+        """Guarda el diagrama de impacto transitivo para un módulo específico."""
+        output_path = Path(output_dir)
+        output_path.mkdir(exist_ok=True)
+        safe_name = target.replace(':', '_').replace('-', '_')
+        impact_file = output_path / f"impact-{safe_name}.mmd"
+        with open(impact_file, 'w', encoding='utf-8') as f:
+            f.write(self.generate_impact_diagram(target))
+        print(f"✓ Impacto: {impact_file}")
+
 
 def main():
     import sys
-    
-    if len(sys.argv) < 2:
-        print("Uso: python gradle_analyzer.py <ruta_al_directorio_credit-card>")
-        print("\nEjemplo:")
-        print("  python gradle_analyzer.py /Users/payalao/Documents/mach/android-mach/credit-card")
-        print("\nEl script detectará automáticamente TODOS los módulos en cualquier profundidad.")
-        sys.exit(1)
-    
-    base_path = sys.argv[1]
-    
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Analizador de dependencias entre módulos Android",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""Ejemplos:
+  python gradle_analyzer.py /ruta/al/proyecto
+  python gradle_analyzer.py /ruta/al/proyecto --impact-module common
+  python gradle_analyzer.py /ruta/al/proyecto --impact-module feature:payment
+"""
+    )
+    parser.add_argument("path", help="Ruta al directorio raíz del proyecto Android")
+    parser.add_argument(
+        "--impact-module",
+        metavar="MODULE",
+        help="Genera diagrama de impacto transitivo para el módulo indicado"
+    )
+    args = parser.parse_args()
+
     print("🚀 Analizador de Dependencias via Gradle")
     print("=" * 70)
-    
-    analyzer = GradleDependencyAnalyzer(base_path)
+
+    analyzer = GradleDependencyAnalyzer(args.path)
     analyzer.scan_modules()
     analyzer.analyze_gradle_dependencies()
-    
+
     print("\n📊 Generando archivos...")
     print("=" * 70)
-    
+
     analyzer.save_all()
-    
+
+    if args.impact_module:
+        analyzer.save_impact(args.impact_module)
+
     print("\n" + analyzer.generate_report())
-    
+
     print("\n" + "=" * 70)
     print("✅ ¡Análisis completado!")
     print("=" * 70)
