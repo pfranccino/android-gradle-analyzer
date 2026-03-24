@@ -10,6 +10,10 @@ Herramientas para analizar y visualizar dependencias entre módulos en proyectos
 - 🎨 **Colores por tipo** de módulo (common, gateway, features)
 - 📊 **Dos perspectivas**: dependencias internas y llamadas externas
 - 📝 **Reportes detallados** en texto plano
+- 🗂️ **Matriz de dependencias (DSM)** para detectar acoplamiento de un vistazo
+- 🔴 **Detección de ciclos** con diagrama Mermaid que los resalta en rojo
+- 🎯 **Análisis de impacto transitivo** para saber qué módulos afecta un cambio
+- 🏗️ **Diagrama de capas arquitectónicas** basado en topological sort
 
 ## 🚀 Instalación
 
@@ -54,11 +58,25 @@ python3 gradle_analyzer.py <ruta_al_modulo>
 python3 gradle_analyzer.py /Users/tu-usuario/proyecto/payments
 ```
 
-**Salida:**
+**Salida generada automáticamente:**
 
-- `diagrams/gradle-dependencies.puml` - Diagrama PlantUML
-- `diagrams/gradle-dependencies.mmd` - Diagrama Mermaid
-- `diagrams/gradle-report.txt` - Reporte detallado
+| Archivo | Descripción |
+|---------|-------------|
+| `diagrams/gradle-dependencies.puml` | Diagrama PlantUML de dependencias |
+| `diagrams/gradle-dependencies.mmd` | Diagrama Mermaid de dependencias |
+| `diagrams/gradle-report.txt` | Reporte detallado en texto |
+| `diagrams/dependency-matrix.txt` | Matriz de dependencias (DSM) |
+| `diagrams/cycle-diagram.mmd` | Diagrama de ciclos (rojo = problema) |
+| `diagrams/layers-diagram.mmd` | Diagrama de capas arquitectónicas |
+
+**Análisis de impacto (opcional):**
+
+```bash
+python3 gradle_analyzer.py /ruta/proyecto --impact-module common
+python3 gradle_analyzer.py /ruta/proyecto --impact-module feature:payment
+```
+
+Genera `diagrams/impact-<modulo>.mmd` con todos los módulos afectados si ese módulo cambia.
 
 ### 2. Analizar Llamadas Externas
 
@@ -128,6 +146,80 @@ Muestra qué módulos externos (app, otros features) usan tu feature:
 │  └──────────┘       │
 └─────────────────────┘
 ```
+
+### Matriz de Dependencias (DSM)
+
+Tabla cruzada donde `X` indica que la fila depende de la columna. Útil para detectar acoplamiento excesivo de un vistazo:
+
+```
+MATRIZ DE DEPENDENCIAS (DSM)
+----------------------------------------------------
+                   app  common  core  network  payment
+----------------------------------------------------
+app             |   ·                           X
+common          |           ·
+core            |                   ·
+feature:payment |           X       X       ·
+network         |                   X       ·
+----------------------------------------------------
+```
+
+> Un módulo que tiene muchas `X` en su fila depende de muchos otros — candidato a simplificarse.
+
+### Diagrama de Ciclos
+
+Detecta dependencias circulares y las resalta en rojo. Los nodos en ciclo aparecen marcados con `⚠️` y los arcos del ciclo se dibujan en rojo:
+
+```
+graph TD
+  ⚠️ ModuloA --> ⚠️ ModuloB --> ⚠️ ModuloC --> ⚠️ ModuloA  (🔴 ciclo)
+  ModuloD -.-> ModuloA
+```
+
+> Un ciclo en rojo es una deuda técnica que impide compilación incremental y dificulta el testing aislado.
+
+### Diagrama de Impacto Transitivo
+
+Dado un módulo objetivo, muestra todos los módulos que serían afectados si ese módulo cambia. Los nodos afectados se colorean en naranja y muestran su distancia (`d=1` directo, `d=2` indirecto, etc.):
+
+```bash
+python3 gradle_analyzer.py /ruta/proyecto --impact-module common
+```
+
+```
+graph TD
+  🎯 common
+  📦 feature:payment (d=1)
+  📦 feature:home (d=1)
+  📦 app (d=2)
+```
+
+> Antes de refactorizar un módulo, genera su diagrama de impacto para dimensionar el alcance del cambio.
+
+### Diagrama de Capas Arquitectónicas
+
+Organiza los módulos en capas calculadas por **topological sort**: los módulos sin dependencias (Foundation) quedan en Layer 0 y los que dependen de todo quedan en la capa más alta (App). Las etiquetas `Foundation` y `App` se asignan automáticamente solo a módulos con nombres universales (`core`, `common`, `base`, `util`, `shared`, `app`):
+
+```
+graph TD
+  subgraph "Layer 0 · Foundation"
+    🏗️ core
+    🏗️ common
+  end
+  subgraph "Layer 1"
+    📦 network
+    🏗️ feature:core
+  end
+  subgraph "Layer 2"
+    📦 feature:payment
+    📦 feature:home
+  end
+  subgraph "Layer 3 · App"
+    📱 app
+  end
+```
+
+> Si ves flechas que van hacia capas superiores (dependencias inversas), es una señal de acoplamiento incorrecto en la arquitectura.
 
 ## 🎨 Personalización
 
