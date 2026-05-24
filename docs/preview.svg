@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 540" font-family="ui-monospace, &#39;JetBrains Mono&#39;, &#39;SF Mono&#39;, Menlo, Consolas, monospace" font-size="13">
+  <rect x="0" y="0" width="880" height="540" rx="10" fill="#14171c"></rect>
+  <rect x="0" y="0" width="880" height="34" rx="10" fill="#1a1e25"></rect>
+  <rect x="0" y="24" width="880" height="10" fill="#1a1e25"></rect>
+  <line x1="0" y1="34" x2="880" y2="34" stroke="#2c3340"></line>
+
+  <circle cx="20" cy="17" r="6" fill="#d97a72"></circle>
+  <circle cx="40" cy="17" r="6" fill="#d8b56a"></circle>
+  <circle cx="60" cy="17" r="6" fill="#87c08a"></circle>
+  <text x="440" y="22" text-anchor="middle" font-size="11" fill="#7a7e88">~  —  gradle-analyzer ~/projects/my-shop/payments</text>
+
+  <g transform="translate(28,66)">
+    <text fill="#d8d4cc"><tspan fill="#87c08a" font-weight="700">$</tspan> gradle-analyzer <tspan fill="#6dc7c0">~/projects/my-shop/payments</tspan></text>
+
+    <text y="32" fill="#6dc7c0" font-weight="700">🚀 Analizador de Dependencias via Gradle</text>
+    <text y="52" fill="#7a7e88">══════════════════════════════════════════════════════════════════</text>
+
+    <text y="80" fill="#d8d4cc">📁 Escaneando módulos en: <tspan fill="#6dc7c0">~/projects/my-shop/payments</tspan></text>
+
+    <text y="108" fill="#d8d4cc">   •  <tspan fill="#d8b56a">common</tspan></text>
+    <text y="128" fill="#d8d4cc">   •  <tspan fill="#7aaad8">gateway</tspan></text>
+    <text y="148" fill="#d8d4cc">   •  <tspan fill="#87c08a">home</tspan></text>
+    <text y="168" fill="#d8d4cc">   •  <tspan fill="#87c08a">checkout</tspan></text>
+    <text y="188" fill="#d8d4cc">   •  <tspan fill="#c08aba">ui</tspan></text>
+
+    <text y="216" fill="#87c08a">✓ 5 módulos encontrados</text>
+
+    <text y="248" fill="#d8d4cc" font-weight="700">🔍 Analizando archivos Gradle…</text>
+    <text y="272" fill="#d8d4cc">   <tspan fill="#87c08a">✓</tspan> common      <tspan fill="#7a7e88">0 dependencias internas</tspan></text>
+    <text y="292" fill="#d8d4cc">   <tspan fill="#87c08a">✓</tspan> gateway     <tspan fill="#7a7e88">1 dependencia   → common</tspan></text>
+    <text y="312" fill="#d8d4cc">   <tspan fill="#87c08a">✓</tspan> home        <tspan fill="#7a7e88">2 dependencias  → common, gateway</tspan></text>
+    <text y="332" fill="#d8d4cc">   <tspan fill="#87c08a">✓</tspan> checkout    <tspan fill="#7a7e88">2 dependencias  → common, gateway</tspan></text>
+    <text y="352" fill="#d8d4cc">   <tspan fill="#87c08a">✓</tspan> ui          <tspan fill="#7a7e88">0 dependencias internas</tspan></text>
+
+    <text y="386" fill="#d8d4cc" font-weight="700">📊 Generando archivos…</text>
+    <text y="410" fill="#d8d4cc">   <tspan fill="#6dc7c0">✓</tspan> diagrams/gradle-dependencies.<tspan fill="#d8b56a">puml</tspan>     <tspan fill="#7a7e88">PlantUML</tspan></text>
+    <text y="430" fill="#d8d4cc">   <tspan fill="#6dc7c0">✓</tspan> diagrams/gradle-dependencies.<tspan fill="#d8b56a">mmd</tspan>      <tspan fill="#7a7e88">Mermaid</tspan></text>
+    <text y="450" fill="#d8d4cc">   <tspan fill="#6dc7c0">✓</tspan> diagrams/gradle-report.<tspan fill="#d8b56a">txt</tspan>             <tspan fill="#7a7e88">Reporte</tspan></text>
+
+    <text y="484" fill="#87c08a" font-weight="700">✅ ¡Análisis completado!<tspan fill="#7a7e88" font-weight="400" dx="10">3 archivos · sin ciclos · score 91/100</tspan></text>
+  </g>
+</svg>

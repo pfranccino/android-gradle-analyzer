@@ -37,8 +37,11 @@ env/
 diagrams/
 external-calls/
 *.png
-*.svg
 *.pdf
+
+# SVG generados (excluir diagrams de PlantUML pero no los assets del repo)
+*.svg
+!docs/*.svg
 
 # Logs
 *.log

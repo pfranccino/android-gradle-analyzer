@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 640" font-family="ui-monospace, &#39;JetBrains Mono&#39;, &#39;SF Mono&#39;, Menlo, Consolas, monospace" font-size="13">
+  <rect x="0" y="0" width="880" height="640" rx="10" fill="#14171c"></rect>
+  <rect x="0" y="0" width="880" height="34" rx="10" fill="#1a1e25"></rect>
+  <rect x="0" y="24" width="880" height="10" fill="#1a1e25"></rect>
+  <line x1="0" y1="34" x2="880" y2="34" stroke="#2c3340"></line>
+
+  <circle cx="20" cy="17" r="6" fill="#d97a72"></circle>
+  <circle cx="40" cy="17" r="6" fill="#d8b56a"></circle>
+  <circle cx="60" cy="17" r="6" fill="#87c08a"></circle>
+  <text x="440" y="22" text-anchor="middle" font-size="11" fill="#7a7e88">~  —  gradle-analyzer-menu</text>
+
+  <g transform="translate(28,62)">
+    
+    <text fill="#6dc7c0">╭─ <tspan font-weight="700">Gradle Analyzer</tspan> <tspan fill="#7a7e88">──────────────────────────────────────</tspan> <tspan fill="#7a7e88">by</tspan> <tspan fill="#d8d4cc">pfranccino</tspan> <tspan fill="#6dc7c0">─╮</tspan></text>
+    <text y="20" fill="#6dc7c0">│ <tspan fill="#7a7e88">Proyecto:</tspan>  <tspan fill="#d8d4cc">~/AndroidStudioProjects/my-shop</tspan>             <tspan fill="#6dc7c0">│</tspan></text>
+    <text y="40" fill="#6dc7c0">│ <tspan fill="#7a7e88">Módulos:</tspan>   <tspan fill="#87c08a" font-weight="700">14 detectados</tspan>     <tspan fill="#7a7e88">Config:</tspan> <tspan fill="#d8b56a">analyzer.json</tspan>  <tspan fill="#6dc7c0">│</tspan></text>
+    <text y="60" fill="#6dc7c0">╰──────────────────────────────────────────────────────────────╯</text>
+
+    
+    <text y="94" fill="#7a7e88">  ┌─ <tspan fill="#d8d4cc" font-weight="700">Módulos del proyecto</tspan> ──────────────────────────────────┐</text>
+    <text y="114" fill="#7a7e88">  │  <tspan fill="#d8b56a">●</tspan> <tspan fill="#d8d4cc">common</tspan>         · <tspan fill="#87c08a">Ca 8</tspan> Ce 0  I 0.00  <tspan fill="#87c08a">🟢 estable</tspan>     │</text>
+    <text y="134" fill="#7a7e88">  │  <tspan fill="#7aaad8">●</tspan> <tspan fill="#d8d4cc">gateway</tspan>        · <tspan fill="#87c08a">Ca 4</tspan> Ce 1  I 0.20  <tspan fill="#87c08a">🟢 estable</tspan>     │</text>
+    <text y="154" fill="#7a7e88">  │  <tspan fill="#87c08a">●</tspan> <tspan fill="#d8d4cc">home</tspan>           · <tspan fill="#d8b56a">Ca 1</tspan> Ce 3  I 0.75  <tspan fill="#d8b56a">🟠 inestable</tspan>   │</text>
+    <text y="174" fill="#7a7e88">  │  <tspan fill="#87c08a">●</tspan> <tspan fill="#d8d4cc">payments</tspan>       · <tspan fill="#d8b56a">Ca 1</tspan> Ce 4  I 0.80  <tspan fill="#d8b56a">🟠 inestable</tspan>   │</text>
+    <text y="194" fill="#7a7e88">  │  <tspan fill="#c08aba">●</tspan> <tspan fill="#d8d4cc">ui</tspan>             · <tspan fill="#d97a72">Ca 0</tspan> Ce 2  I 1.00  <tspan fill="#d97a72">🔴 hoja</tspan>         │</text>
+    <text y="214" fill="#7a7e88">  │      … y 9 más  ↓                                          │</text>
+    <text y="234" fill="#7a7e88">  └────────────────────────────────────────────────────────────┘</text>
+
+    
+    <text y="270" fill="#d8d4cc"><tspan fill="#87c08a">❯</tspan> <tspan font-weight="700">Acción:</tspan>  <tspan fill="#14171c" font-weight="700">  [1] Internas  </tspan><tspan fill="#7a7e88">  [2] Externas  [3] Sanidad  [4] Exportar  [q] Salir</tspan></text>
+    <rect x="118" y="258" width="124" height="18" fill="#6dc7c0"></rect>
+    <text x="125" y="270" fill="#14171c" font-weight="700">[1] Internas</text>
+
+    
+    <text y="302" fill="#7a7e88">  ────────────────────────────────────────────────────────────</text>
+    <text y="322" fill="#d8d4cc"><tspan fill="#d8b56a">⠋</tspan> Analizando <tspan fill="#6dc7c0">payments</tspan>…  <tspan fill="#7a7e88">━━━━━━━━━━━</tspan><tspan fill="#6dc7c0">━━━━━━━━━</tspan><tspan fill="#7a7e88">  68%</tspan></text>
+
+    
+    <text y="358" fill="#7a7e88">  ┌─ <tspan fill="#d8d4cc" font-weight="700">Último análisis</tspan> ───────── 3 archivos base + extras ──┐</text>
+    <text y="378" fill="#7a7e88">  │  <tspan fill="#87c08a">✓</tspan> diagrams/gradle-dependencies.<tspan fill="#d8b56a">puml</tspan>   <tspan fill="#7a7e88">PlantUML  12 KB</tspan>  │</text>
+    <text y="398" fill="#7a7e88">  │  <tspan fill="#87c08a">✓</tspan> diagrams/gradle-dependencies.<tspan fill="#d8b56a">mmd</tspan>    <tspan fill="#7a7e88">Mermaid    3 KB</tspan>  │</text>
+    <text y="418" fill="#7a7e88">  │  <tspan fill="#87c08a">✓</tspan> diagrams/gradle-report.<tspan fill="#d8b56a">txt</tspan>           <tspan fill="#7a7e88">Reporte    4 KB</tspan>  │</text>
+
+    
+    <rect x="20" y="428" width="30" height="18" fill="#87c08a"></rect>
+    <text x="29" y="441" fill="#14171c" font-weight="700">e</text>
+    <text y="441" fill="#d8d4cc"><tspan x="60">exportar a HTML/PDF/MD/ZIP</tspan></text>
+    <rect x="280" y="428" width="30" height="18" fill="#87c08a"></rect>
+    <text x="289" y="441" fill="#14171c" font-weight="700">o</text>
+    <text x="320" y="441" fill="#d8d4cc">abrir online</text>
+    <text y="441" fill="#7a7e88"><tspan x="14">│</tspan><tspan x="430">│</tspan></text>
+
+    <text y="461" fill="#7a7e88">  └────────────────────────────────────────────────────────────┘</text>
+
+    
+    <text y="498" fill="#d8d4cc">
+      <tspan fill="#7a7e88">↑↓ navegar</tspan>
+      <tspan dx="20" fill="#7a7e88">↵ elegir</tspan>
+      <tspan dx="20" fill="#7a7e88">esc</tspan>
+      <tspan dx="6" fill="#d8d4cc">volver al menú</tspan>
+      <tspan dx="20" fill="#7a7e88">/  buscar</tspan>
+      <tspan dx="20" fill="#7a7e88">q  salir</tspan>
+    </text>
+
+    <text y="552" fill="#7a7e88" text-anchor="middle" x="412">made with care · pfranccino.dev</text>
+  </g>
+</svg>
