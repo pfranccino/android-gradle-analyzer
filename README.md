@@ -17,8 +17,11 @@ Herramientas para **analizar, visualizar y medir la salud** de las dependencias 
 ## ⚡ Quick start
 
 ```bash
-# Recomendado · instalación global con pipx
+# Recomendado · instalación global con pipx (última versión)
 pipx install git+https://github.com/pfranccino/android-gradle-analyzer.git
+
+# Versión específica
+pipx install git+https://github.com/pfranccino/android-gradle-analyzer.git@v0.1.0
 
 # 1 · Dependencias internas de un módulo
 gradle-analyzer /ruta/a/tu/proyecto/payments
