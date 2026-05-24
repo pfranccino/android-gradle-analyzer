@@ -135,6 +135,17 @@ _DEFAULTS = {
         "releaseImplementation": "release",
         "runtimeOnly": "runtime",
     },
+    "sanity_weights": {
+        # Penalizaciones al score (base 100). Configurables por el usuario.
+        # No son un estándar externo — son defaults razonables que puedes ajustar.
+        "cycle": 20,                  # -20 por cada ciclo detectado
+        "sdp_violation": 10,          # -10 por cada violación SDP (estable → inestable)
+        "unnecessary_api": 5,         # -5 por cada módulo con `api` pero Ca=0
+        "high_fan_out_threshold": 5,  # Ce > este valor se considera fan-out excesivo
+        "high_fan_out_penalty": 3,    # -3 por cada módulo con fan-out excesivo
+        "hardcoded_version": 2,       # -2 por cada versión hardcodeada encontrada
+        "sdp_threshold": 0.3,         # diferencia mínima de I para considerar violación SDP
+    },
 }
 
 
