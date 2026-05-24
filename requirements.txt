@@ -1,3 +1,7 @@
 questionary>=2.0
 rich>=13.7
-weasyprint  # optional: PDF export (install manually if needed)
+
+# PDF export (opcional) — requiere GTK/Pango en Windows
+# Windows: https://doc.courtbouillon.org/weasyprint/stable/first_steps.html
+# macOS/Linux: pip install weasyprint
+# weasyprint

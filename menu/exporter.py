@@ -13,12 +13,31 @@ from rich.console import Console
 
 from menu.branding import EXPORT_FOOTER
 
-# PDF es opcional — weasyprint puede no estar instalado
-try:
-    from weasyprint import HTML as _WP_HTML
-    PDF_AVAILABLE = True
-except ImportError:
-    PDF_AVAILABLE = False
+# PDF es opcional — weasyprint puede no estar instalado o faltar deps nativas.
+# En Windows requiere GTK/Pango (libgobject), que no vienen por defecto.
+# Usamos import lazy (solo al llamar to_pdf) para no imprimir nada al cargar el módulo.
+import importlib as _importlib
+
+def _try_import_weasyprint():
+    """Intenta importar weasyprint en tiempo de ejecución. Devuelve el módulo o None."""
+    try:
+        return _importlib.import_module("weasyprint")
+    except Exception:
+        return None
+
+def _pdf_available() -> bool:
+    """Comprueba si weasyprint está disponible SIN imprimir nada."""
+    import subprocess, sys
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", "import weasyprint"],
+            capture_output=True, timeout=5,
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+PDF_AVAILABLE = _pdf_available()
 
 
 def _timestamp() -> str:
@@ -67,14 +86,20 @@ def to_pdf(summary: str, dest: str | None = None, project_name: str = "analysis"
     """
     if not PDF_AVAILABLE:
         raise RuntimeError(
-            "weasyprint no está instalado. Instalalo con: pip install weasyprint"
+            "weasyprint no está disponible. "
+            "En macOS/Linux: pip install weasyprint. "
+            "En Windows requiere GTK: ver https://doc.courtbouillon.org/weasyprint/stable/first_steps.html"
         )
+
+    wp = _try_import_weasyprint()
+    if wp is None:
+        raise RuntimeError("No se pudo importar weasyprint.")
 
     if dest is None:
         dest = f"{project_name}-{_timestamp()}.pdf"
 
     html_path = to_html(summary, dest=dest + ".tmp.html", project_name=project_name)
-    _WP_HTML(filename=html_path).write_pdf(dest)
+    wp.HTML(filename=html_path).write_pdf(dest)
     Path(html_path).unlink(missing_ok=True)
     return dest
 
