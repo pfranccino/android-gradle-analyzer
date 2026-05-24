@@ -69,7 +69,6 @@ def ask_project_path(prompt: str = "Ruta al proyecto Android") -> str | None:
         default=default,
         only_directories=True,
         style=_STYLE,
-        instruction="(Esc para cancelar)",
     ).ask()
     # questionary.path devuelve None con Esc, o "" si borra y confirma
     if not answer:
@@ -88,7 +87,6 @@ def ask_module(modules: list[str], prompt: str = "Módulo a analizar") -> str | 
         answer = questionary.text(
             f"{prompt} (nombre del módulo):",
             style=_STYLE,
-            instruction="(Esc para cancelar)",
         ).ask()
         return answer or None
 
@@ -103,7 +101,6 @@ def ask_module(modules: list[str], prompt: str = "Módulo a analizar") -> str | 
             choices=modules,
             default=default or "",
             style=_STYLE,
-            instruction="(Esc para cancelar)",
         ).ask()
         return answer if answer and answer != BACK else None
     else:
@@ -177,7 +174,6 @@ def ask_confirm(msg: str, default: bool = True) -> bool:
         msg,
         default=default,
         style=_STYLE,
-        instruction="(s/n  Esc=no)",
     ).ask()
     return bool(answer)
 
