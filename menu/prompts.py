@@ -201,8 +201,8 @@ def ask_export_formats(pdf_available: bool = True) -> list[str] | None:
     Devuelve None si el usuario cancela.
     """
     choices = [
-        questionary.Choice("HTML  (colores, standalone)",    value="html",     checked=True),
-        questionary.Choice("Markdown  (con bloque mermaid)", value="markdown", checked=True),
+        questionary.Choice("HTML  (colores, standalone)",    value="html",     checked=False),
+        questionary.Choice("Markdown  (con bloque mermaid)", value="markdown", checked=False),
         questionary.Choice("ZIP  (todos los archivos)",      value="zip",      checked=False),
     ]
     if pdf_available:
