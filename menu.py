@@ -105,33 +105,29 @@ def _handle_export(last_result: dict | None) -> None:
 
 def _offer_plantuml_open(outputs: list[str]) -> None:
     """Ofrece abrir el .puml online o renderizarlo localmente."""
+    import questionary
+
     puml_files = [f for f in outputs if f.endswith(".puml")]
     if not puml_files:
         return
 
     puml = puml_files[0]
-    choices = ["Abrir en plantuml.com (browser)", "Renderizar localmente (si plantuml está en PATH)", "No, gracias"]
-    answer = prompts.ask_text(
-        f"¿Qué hacemos con el diagrama PlantUML? (1/2/3)\n"
-        f"  1. Abrir en plantuml.com\n"
-        f"  2. Renderizar localmente\n"
-        f"  3. Nada\n"
-        f"Opción",
-        default="3",
-    )
+    answer = questionary.select(
+        "¿Qué hacemos con el diagrama PlantUML?",
+        choices=[
+            questionary.Choice("Abrir en plantuml.com (browser)", value="online"),
+            questionary.Choice("Renderizar localmente (plantuml en PATH)", value="local"),
+            questionary.Choice("← Nada, continuar", value=None),
+        ],
+        instruction="(↑↓  ↵ elegir  Esc omitir)",
+    ).ask()
 
-    if answer == "1":
+    if answer == "online":
         ok = open_plantuml_online(puml)
-        if ok:
-            console.print("  [green]✓[/green] Browser abierto.")
-        else:
-            console.print("  [yellow]⚠[/yellow] No se pudo abrir el browser.")
-    elif answer == "2":
+        console.print("  [green]✓[/green] Browser abierto." if ok else "  [yellow]⚠[/yellow] No se pudo abrir el browser.")
+    elif answer == "local":
         ok, msg = render_plantuml_local(puml)
-        if ok:
-            console.print(f"  [green]✓[/green] {msg}")
-        else:
-            console.print(f"  [yellow]⚠[/yellow] {msg}")
+        console.print(f"  [green]✓[/green] {msg}" if ok else f"  [yellow]⚠[/yellow] {msg}")
 
 
 def _post_analysis(result: dict, action: str, project: str, module: str | None) -> dict:

@@ -38,6 +38,10 @@ def print_header(project_path: str | None = None, n_modules: int = 0) -> None:
     content_text.append_text(Text.from_markup(f"\n{credit}"))
 
     console.print(Panel(content_text, border_style="cyan", padding=(0, 1)))
+    # Footer de keybindings visible
+    console.print(
+        "[dim]  ↑↓ navegar    ↵ elegir    Esc cancelar / volver    q salir[/dim]"
+    )
 
 
 # ── Spinner durante análisis ──────────────────────────────────────────────────

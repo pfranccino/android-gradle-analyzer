@@ -1,176 +1,166 @@
+<div align="center">
+
 # 📊 Android Gradle Dependency Analyzer
 
-Herramientas para analizar y visualizar dependencias entre módulos en proyectos Android multi-módulo.
+Herramientas para **analizar, visualizar y medir la salud** de las dependencias entre módulos en proyectos Android multi-módulo.
 
-## 🎯 Características
+[![Python](https://img.shields.io/badge/python-3.7+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![PlantUML](https://img.shields.io/badge/diagrams-PlantUML%20%C2%B7%20Mermaid-orange)](https://plantuml.com)
 
-- 🎛️ **Menú interactivo** con `python3 menu.py` — un único comando para todo
-- ✅ **Análisis automático** de dependencias leyendo archivos `build.gradle` / `build.gradle.kts`
-- 🔍 **Detección recursiva** de todos los módulos sin importar la profundidad
-- 📈 **Visualización clara** con diagramas PlantUML y Mermaid
-- 🎨 **Colores por tipo** de módulo (common, gateway, features)
-- 📊 **Dos perspectivas**: dependencias internas y llamadas externas
-- 📝 **Reportes detallados** en texto plano
-- ⚠️ **Detección de ciclos** de dependencia
-- 🔭 **Múltiples scopes**: `implementation`, `api`, `kapt`, `compileOnly`, `testImplementation` y más
-- 🏥 **Análisis de sanidad** con métricas de acoplamiento y score configurable
-- 📤 **Export** a HTML / Markdown / ZIP (PDF opcional con weasyprint)
-- 💾 **Memoria de sesión**: recuerda el último proyecto en `~/.gradle-analyzer/state.json`
-- ⚙️ **Configuración personalizable** via `analyzer_config.json`
+<img src="docs/preview.svg" alt="Vista previa del analizador en consola" width="780"/>
 
-## 🎛️ Modo interactivo
-
-```bash
-python3 menu.py
-```
-
-Menú visual con todos los análisis, autodetección de módulos, exportación
-a HTML / Markdown / ZIP y memoria del último proyecto usado.
-
-**Modo no-interactivo (CI/scripts):**
-```bash
-python3 menu.py --quick sanity /ruta/proyecto
-python3 menu.py --quick internal /ruta/modulo
-python3 menu.py --version
-```
-
-**Requisitos extra:** `pip install -r requirements.txt`
+</div>
 
 ---
 
-## 🚀 Instalación
-
-### Requisitos
-
-- Python 3.7+
-- PlantUML (opcional, para generar imágenes PNG/SVG)
-
-### Clonar el repositorio
+## ⚡ Quick start
 
 ```bash
 git clone https://github.com/pfranccino/android-gradle-analyzer.git
 cd android-gradle-analyzer
+
+# 1 · Dependencias internas de un módulo
+python3 gradle_analyzer.py /ruta/a/tu/proyecto/payments
+
+# 2 · Quién llama a un módulo desde fuera
+python3 external_callers.py /ruta/a/tu/proyecto payments
+
+# 3 · Score de sanidad (Ca/Ce/I, ciclos, anti-patrones)
+python3 gradle_sanity.py /ruta/a/tu/proyecto/payments
 ```
 
-### Instalar dependencias Python (para el menú interactivo)
+---
+
+## 🎛️ Modo interactivo
+
+Un único comando con dashboard, autodetección de módulos, navegación con teclado y export a HTML / Markdown / ZIP.
 
 ```bash
 pip install -r requirements.txt
+python3 menu.py
 ```
 
-> O usando el script de setup: `bash setup.sh`
+<div align="center">
+<img src="docs/preview-menu.svg" alt="Vista previa del menú interactivo" width="780"/>
+</div>
 
-### Instalar PlantUML (opcional)
-
+**Modo no-interactivo (CI/scripts):**
 ```bash
-# macOS
-brew install plantuml
-
-# Ubuntu/Debian
-sudo apt install plantuml
-
-# Windows (con Chocolatey)
-choco install plantuml
+python3 menu.py --quick sanity /ruta/proyecto
+python3 menu.py --version
 ```
+
+---
+
+## ✨ Qué hace
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+### 🔍 Dependencias internas
+Lee `build.gradle` / `build.gradle.kts` recursivamente y dibuja cómo dependen los módulos entre sí.
+
+**Salida** · PlantUML · Mermaid · reporte de texto
+
+</td>
+<td width="33%" valign="top">
+
+### 🌐 Llamadas externas
+Detecta qué módulos de **fuera** de tu feature lo están consumiendo. Útil para refactors seguros.
+
+**Salida** · PlantUML · Mermaid · reporte de texto
+
+</td>
+<td width="33%" valign="top">
+
+### 🏥 Sanidad arquitectónica
+Métricas Ca/Ce/I, detección de ciclos, violaciones SDP y score 0–100 con explicación.
+
+**Salida** · reporte detallado
+
+</td>
+</tr>
+</table>
+
+### Características destacadas
+
+- ✅ **Detección recursiva** sin importar la profundidad de los módulos
+- 🎨 **Colores por tipo** (common, gateway, features)
+- ⚠️ **Detección automática de ciclos**
+- 🔭 **Scopes soportados:** `implementation`, `api`, `kapt`, `compileOnly`, `testImplementation`, y más
+- ⚙️ **Configuración personalizable** via `analyzer_config.json`
+
+---
 
 ## 📖 Uso
 
-### 1. Analizar Dependencias Internas
-
-Analiza las dependencias **dentro** de un módulo específico.
+<details>
+<summary><b>1. Analizar dependencias internas</b></summary>
 
 ```bash
 python3 gradle_analyzer.py <ruta_al_modulo>
 ```
 
-**Ejemplo:**
-
-```bash
-python3 gradle_analyzer.py /ruta/a/tu/proyecto/payments
-```
-
-**Flags opcionales:**
-
 | Flag | Descripción | Default |
 |---|---|---|
 | `--format plantuml\|mermaid\|all` | Formato de salida | `all` |
-| `--output-dir <dir>` | Directorio donde guardar los archivos | `diagrams` |
+| `--output-dir <dir>` | Directorio de salida | `diagrams` |
 | `--exclude <module>` | Excluir un módulo (puede repetirse) | — |
-| `--config <path>` | Ruta a un `analyzer_config.json` personalizado | auto-detect |
+| `--config <path>` | Ruta a `analyzer_config.json` personalizado | auto-detect |
 
-**Ejemplos con flags:**
+**Ejemplos:**
 
 ```bash
-# Solo generar Mermaid
-python3 gradle_analyzer.py /ruta/a/tu/proyecto/payments --format mermaid
+# Solo Mermaid
+python3 gradle_analyzer.py /ruta/proyecto/payments --format mermaid
 
 # Excluir módulos de test
-python3 gradle_analyzer.py /ruta/a/tu/proyecto/payments --exclude test-utils --exclude mocks
+python3 gradle_analyzer.py /ruta/proyecto/payments --exclude test-utils --exclude mocks
 
-# Usar directorio de salida personalizado (se crean los padres automáticamente)
-python3 gradle_analyzer.py /ruta/a/tu/proyecto/payments --output-dir docs/diagrams
+# Output personalizado
+python3 gradle_analyzer.py /ruta/proyecto/payments --output-dir docs/diagrams
 ```
 
-**Salida:**
+**Genera:**
+- `diagrams/gradle-dependencies.puml`
+- `diagrams/gradle-dependencies.mmd`
+- `diagrams/gradle-report.txt`
 
-- `diagrams/gradle-dependencies.puml` — Diagrama PlantUML
-- `diagrams/gradle-dependencies.mmd` — Diagrama Mermaid
-- `diagrams/gradle-report.txt` — Reporte detallado
+</details>
 
----
-
-### 2. Analizar Llamadas Externas
-
-Detecta qué módulos externos llaman a tu módulo target.
+<details>
+<summary><b>2. Analizar llamadas externas</b></summary>
 
 ```bash
 python3 external_callers.py <ruta_proyecto> <nombre_modulo>
 ```
 
-**Ejemplo:**
-
-```bash
-python3 external_callers.py /ruta/a/tu/android-project payments
-```
-
-**Flags opcionales:**
-
 | Flag | Descripción | Default |
 |---|---|---|
 | `--format plantuml\|mermaid\|all` | Formato de salida | `all` |
-| `--output-dir <dir>` | Directorio donde guardar los archivos | `external-calls` |
-| `--config <path>` | Ruta a un `analyzer_config.json` personalizado | auto-detect |
+| `--output-dir <dir>` | Directorio de salida | `external-calls` |
+| `--config <path>` | Config personalizado | auto-detect |
 
-**Salida:**
+**Genera:**
+- `external-calls/<modulo>-external-calls.puml`
+- `external-calls/<modulo>-external-calls.mmd`
+- `external-calls/<modulo>-external-report.txt`
 
-- `external-calls/payments-external-calls.puml`
-- `external-calls/payments-external-calls.mmd`
-- `external-calls/payments-external-report.txt`
+</details>
 
----
-
-### 3. Analizar Sanidad de Dependencias
-
-Mide la **salud arquitectónica** del módulo calculando métricas de acoplamiento y detectando anti-patrones. Genera un score de 0 a 100 con explicación de cada problema encontrado.
+<details>
+<summary><b>3. Analizar sanidad arquitectónica</b></summary>
 
 ```bash
 python3 gradle_sanity.py <ruta_al_modulo>
 ```
 
-**Ejemplo:**
-
-```bash
-python3 gradle_sanity.py /ruta/a/tu/proyecto/payments
-```
-
-**Flags opcionales:**
-
 | Flag | Descripción | Default |
 |---|---|---|
-| `--output-dir <dir>` | Directorio donde guardar el reporte | `sanity` |
-| `--config <path>` | Ruta a un `analyzer_config.json` personalizado | auto-detect |
-
-**Salida:** `sanity/sanity-report.txt`
+| `--output-dir <dir>` | Directorio de salida | `sanity` |
+| `--config <path>` | Config personalizado | auto-detect |
 
 **Ejemplo de reporte:**
 
@@ -198,114 +188,58 @@ PUNTUACIÓN FINAL: 91 / 100  🟢 Excelente
 
 | Columna | Significado |
 |---|---|
-| **Ca** | Cuántos módulos dependen de este (flechas que llegan). Alto en `common`, `core`. |
-| **Ce** | Cuántos módulos usa este (flechas que salen). Alto en `app`, features de alto nivel. |
-| **I** | `Ce / (Ce + Ca)`. 0 = muy estable, 1 = muy inestable. Lo importante es la dirección: las dependencias deben ir de I alto → I bajo. |
+| **Ca** | Cuántos módulos dependen de éste (fan-in). Alto en `common`, `core`. |
+| **Ce** | De cuántos depende éste (fan-out). Alto en `app` o features de alto nivel. |
+| **I** | `Ce / (Ce + Ca)`. 0 = muy estable, 1 = muy inestable. |
 
 **¿Qué detecta?**
 
 | Problema | Penalización default | Descripción |
 |---|---|---|
-| Ciclo | -20 pts | A depende de B y B depende de A |
-| Violación SDP | -10 pts | Módulo estable (I bajo) depende de uno inestable (I alto) |
-| `api` innecesario | -5 pts | Usa `api` pero Ca=0, nadie consume esas deps transitivas |
-| Fan-out excesivo | -3 pts | Ce supera el umbral (default: 5) |
-| Versión hardcodeada | -2 pts | `"lib:x:1.2.3"` en lugar de Version Catalog |
+| Ciclo | −20 pts | A depende de B y B depende de A |
+| Violación SDP | −10 pts | Estable depende de inestable |
+| `api` innecesario | −5 pts | Usa `api` pero `Ca=0` |
+| Fan-out excesivo | −3 pts | `Ce` supera el umbral (default: 5) |
+| Versión hardcodeada | −2 pts | `"lib:x:1.2.3"` en vez de Version Catalog |
 
-Los pesos son **configurables** en `analyzer_config.json` bajo `sanity_weights`.
+Los pesos son configurables en `analyzer_config.json` bajo `sanity_weights`.
 
----
+</details>
 
-### 4. Generar Imágenes
+<details>
+<summary><b>4. Generar imágenes desde PlantUML</b></summary>
 
 ```bash
-# Convertir .puml a PNG
+# PNG
 plantuml diagrams/gradle-dependencies.puml
+plantuml diagrams/*.puml external-calls/*.puml
 
-# Convertir todos los archivos .puml
-plantuml diagrams/*.puml
-plantuml external-calls/*.puml
-
-# Generar SVG (escalable)
+# SVG (escalable)
 plantuml -tsvg diagrams/gradle-dependencies.puml
 ```
 
-## ⚠️ Detección de Ciclos
+**Instalar PlantUML:**
 
-Los ciclos de dependencia se detectan automáticamente y se muestran al inicio del reporte:
-
-```
-======================================================================
-⚠️  CICLOS DETECTADOS (1)
-======================================================================
-  Ciclo 1: home → common → home
+```bash
+brew install plantuml          # macOS
+sudo apt install plantuml      # Ubuntu/Debian
+choco install plantuml         # Windows
 ```
 
-Los módulos involucrados en un ciclo también aparecen **marcados en rojo** en los diagramas PlantUML y Mermaid.
+</details>
 
-## 🔭 Dependency Scopes Soportados
+---
 
-| Scope | Categoría visual |
-|---|---|
-| `api`, `implementation`, `compileOnly` | Flecha sólida (compile) |
-| `kapt`, `annotationProcessor` | Flecha punteada (build/procesadores) |
-| `testImplementation`, `androidTestImplementation`, `debugImplementation`, `releaseImplementation`, `runtimeOnly`, `testRuntimeOnly` | Flecha punteada con label (test/debug) |
+## 🎨 Configuración personalizada
 
-En el reporte de texto se muestra el scope exacto por cada dependencia:
-
-```
-📦 home
-  → common   [implementation]
-  → common   [kapt]
-  → gateway  [testImplementation]
-```
-
-## 📊 Ejemplos de Salida
-
-### Diagrama de Dependencias Internas
-
-Muestra cómo los módulos dentro de tu feature dependen unos de otros:
-
-```
-┌─────────────┐         ┌─────────────┐
-│    home     │ ───────→│   common    │
-└─────────────┘         └─────────────┘
-       │
-       ↓
-┌─────────────┐
-│  dashboard  │
-└─────────────┘
-```
-
-### Diagrama de Llamadas Externas
-
-Muestra qué módulos externos (app, otros features) usan tu feature:
-
-```
-┌─────────────┐
-│     app     │ 🟠
-└─────────────┘
-       │
-       ↓
-┌─────────────────────┐
-│   my-feature        │
-│  ┌──────────┐       │
-│  │  home    │ 🟢    │
-│  └──────────┘       │
-└─────────────────────┘
-```
-
-## ⚙️ Configuración Personalizada
-
-Puedes personalizar colores, íconos y estilos creando un archivo `analyzer_config.json` en el directorio desde donde ejecutas la herramienta. El archivo es **completamente opcional** — sin él, la herramienta usa defaults genéricos para cualquier proyecto Android.
-
-El repositorio incluye `analyzer_config.example.json` con todos los campos disponibles documentados. Para activarlo:
+Sin config, el analizador usa defaults genéricos para cualquier proyecto Android. Si querés personalizar colores, íconos y estilos:
 
 ```bash
 cp analyzer_config.example.json analyzer_config.json
 ```
 
-**Ejemplo de configuración parcial:**
+<details>
+<summary><b>Ejemplo de configuración</b></summary>
 
 ```json
 {
@@ -320,176 +254,142 @@ cp analyzer_config.example.json analyzer_config.json
 }
 ```
 
-Solo necesitas incluir los campos que quieras cambiar — el resto usa los defaults.
+Solo incluí los campos que querés cambiar — el resto usa defaults.
 
-**Orden de búsqueda del config:**
+**Orden de búsqueda:**
 1. `--config <path>` explícito
-2. `analyzer_config.json` en el directorio de trabajo actual
+2. `analyzer_config.json` en el directorio actual
 3. Defaults internos
 
-## 🎨 Personalización del Código
+</details>
 
-### Ajustar Espaciado
+---
 
-Edita `gradle_analyzer.py`, sección `generate_plantuml()`:
+## 🔭 Scopes soportados
 
-```python
-"skinparam nodesep 150",    # Espacio horizontal (default: 150)
-"skinparam ranksep 150",    # Espacio vertical  (default: 150)
-"skinparam padding 30",     # Espacio interno   (default: 30)
-```
+| Scope | Categoría visual |
+|---|---|
+| `api`, `implementation`, `compileOnly` | Flecha sólida (compile) |
+| `kapt`, `annotationProcessor` | Flecha punteada (build) |
+| `testImplementation`, `androidTestImplementation`, `debugImplementation`, `releaseImplementation`, `runtimeOnly`, `testRuntimeOnly` | Flecha punteada con label (test/debug) |
 
-**Valores sugeridos:**
+---
 
-- **Compacto**: 60, 60, 10
-- **Balanceado**: 100, 100, 20
-- **Espacioso**: 150, 150, 30
+## 📋 Más info
 
-## 📋 Estructura del Proyecto
+<details>
+<summary><b>Estructura del proyecto</b></summary>
 
 ```
 android-gradle-analyzer/
-├── README.md                  ← Documentación principal
-├── LICENSE                    ← Licencia MIT
-├── .gitignore
-├── CONTRIBUTING.md            ← Guía para contribuir
-├── EXAMPLES.md                ← Ejemplos de uso
-├── setup.sh                   ← Script de configuración
-├── analyzer_utils.py          ← Utilidades compartidas
-├── analyzer_config.example.json ← Configuración de ejemplo (cp → analyzer_config.json para activar)
-├── gradle_analyzer.py           ← Script 1: dependencias internas + diagramas
-├── external_callers.py          ← Script 2: qué módulos externos llaman a este
-└── gradle_sanity.py             ← Script 3: métricas de acoplamiento y score de sanidad
+├── README.md
+├── LICENSE
+├── CONTRIBUTING.md
+├── EXAMPLES.md
+├── setup.sh
+├── requirements.txt
+├── menu.py                      ← menú interactivo
+├── menu/                        ← módulos del menú
+│   ├── actions.py
+│   ├── branding.py
+│   ├── exporter.py
+│   ├── prompts.py
+│   ├── state.py
+│   └── ui.py
+├── analyzer_utils.py            ← utilidades compartidas
+├── analyzer_config.example.json ← config de ejemplo
+├── gradle_analyzer.py           ← script 1: dependencias internas
+├── external_callers.py          ← script 2: llamadas externas
+└── gradle_sanity.py             ← script 3: sanidad + score
 ```
 
-## 🔧 Cómo Funciona
+</details>
 
-### Detección de Módulos
+<details>
+<summary><b>Cómo funciona internamente</b></summary>
 
-1. Usa `rglob()` para buscar **recursivamente** todos los archivos `build.gradle*`
-2. Convierte paths a nombres de módulos: `payments/home` → `payments:home`
-3. Mapea cada módulo encontrado
+**Detección de módulos**
+1. `rglob()` busca recursivamente todos los `build.gradle*`.
+2. Paths → nombres: `payments/home` → `payments:home`.
 
-### Extracción de Dependencias
+**Extracción de dependencias**
+1. Lee cada `build.gradle`.
+2. Regex sobre cada scope: `implementation project(":...")`, `api(project(":..."))`, `kapt project(':...')`, etc.
+3. Normaliza y guarda las relaciones por scope.
 
-1. Lee el contenido completo de cada `build.gradle`
-2. Aplica **regex** para encontrar todos los scopes:
-   ```kotlin
-   implementation project(":my-feature:common")
-   api(project(":my-feature:gateway"))
-   kapt project(':my-feature:common')
-   ```
-3. Normaliza los paths y almacena las relaciones por scope
+**Generación de diagramas**
+1. Clasifica módulos por tipo (common, gateway, features).
+2. Aplica colores según clasificación.
+3. Genera PlantUML/Mermaid agrupados por categoría visual.
+4. Marca en rojo los módulos involucrados en ciclos.
 
-### Generación de Diagramas
+</details>
 
-1. Clasifica módulos por tipo (common, gateway, features)
-2. Aplica colores según la clasificación
-3. Genera código PlantUML/Mermaid con las dependencias agrupadas por categoría visual
-4. Marca en rojo los módulos involucrados en ciclos
+<details>
+<summary><b>Ajustar espaciado de diagramas</b></summary>
+
+En `gradle_analyzer.py`, función `generate_plantuml()`:
+
+```python
+"skinparam nodesep 150",    # Horizontal
+"skinparam ranksep 150",    # Vertical
+"skinparam padding 30",     # Interno
+```
+
+| Estilo | nodesep / ranksep / padding |
+|---|---|
+| Compacto | 60 / 60 / 10 |
+| Balanceado | 100 / 100 / 20 |
+| Espacioso | 150 / 150 / 30 |
+
+</details>
+
+<details>
+<summary><b>Troubleshooting</b></summary>
+
+**"No se encontró gradle para: [módulo]"**
+El módulo no tiene `build.gradle` ni `build.gradle.kts`. Verificá el path.
+
+**Diagrama apretado**
+Subí los valores de espaciado (ver sección anterior).
+
+**No detecta algunas dependencias**
+El formato del gradle puede ser distinto al estándar. Revisá los patrones en `analyzer_utils.py` (constante `DEPENDENCY_SCOPES`).
+
+**El menú interactivo no arranca**
+Instalá las dependencias: `pip install -r requirements.txt`
+
+</details>
+
+<details>
+<summary><b>Referencias del análisis de sanidad</b></summary>
+
+Las métricas de `gradle_sanity.py` están basadas en fuentes verificadas:
+
+- **Low coupling / High cohesion en Android** — [Guide to Android app modularization](https://developer.android.com/topic/modularization) · [Common modularization patterns](https://developer.android.com/topic/modularization/patterns)
+- **Métricas Ca, Ce, I** — [Efferent coupling — Wikipedia](https://en.wikipedia.org/wiki/Efferent_coupling). `I = Fan-out / (Fan-in + Fan-out)`, rango [0, 1].
+- **Stable Dependencies Principle** — [Software Coupling Metrics — entrofi.net](https://www.entrofi.net/coupling-metrics-afferent-and-efferent-coupling/). El umbral 0.3 es un parámetro configurable, no parte del SDP original.
+- **DAGP** — [dependency-analysis-gradle-plugin](https://github.com/autonomousapps/dependency-analysis-gradle-plugin). Inspiró la detección de scopes mal declarados.
+- **Detección de ciclos** — DFS con coloreo de nodos (blanco/gris/negro).
+
+> El **score 0–100 no es un estándar externo.** Es orientativo con pesos razonables como punto de partida, ajustables en `analyzer_config.json` bajo `sanity_weights`.
+
+</details>
+
+---
 
 ## 🤝 Contribuir
 
-Las contribuciones son bienvenidas! Por favor:
-
-1. Fork el proyecto
-2. Crea una rama para tu feature (`git checkout -b feature/nueva-funcionalidad`)
-3. Commit tus cambios (`git commit -m 'Agrega nueva funcionalidad'`)
-4. Push a la rama (`git push origin feature/nueva-funcionalidad`)
-5. Abre un Pull Request
-
-## 📝 Casos de Uso
-
-- ✅ Documentar arquitectura de proyectos multi-módulo
-- ✅ Detectar dependencias circulares y violaciones SDP
-- ✅ Medir y mejorar la salud arquitectónica con score de sanidad
-- ✅ Identificar módulos altamente acoplados
-- ✅ Auditar dependencias antes de refactorizar
-- ✅ Onboarding de nuevos desarrolladores
-- ✅ Revisiones de arquitectura
-
-## 🐛 Troubleshooting
-
-### Error: "No se encontró gradle para: [módulo]"
-
-**Causa**: El módulo no tiene archivo `build.gradle` o `build.gradle.kts`
-
-**Solución**: Verifica que el path sea correcto y que el módulo tenga un archivo gradle.
-
-### Diagrama se ve muy apretado
-
-**Solución**: Aumenta los valores de espaciado en `generate_plantuml()`:
-
-```python
-"skinparam nodesep 200",
-"skinparam ranksep 200",
-"skinparam padding 40",
-```
-
-### No detecta algunas dependencias
-
-**Causa**: El formato del gradle puede ser diferente al estándar
-
-**Solución**: Verifica los patrones regex en `analyzer_utils.py` (constante `DEPENDENCY_SCOPES`) y agrega el formato que usa tu proyecto.
-
-## 📚 Referencias — Análisis de Sanidad
-
-Las métricas de `gradle_sanity.py` están basadas en las siguientes fuentes, todas verificadas y de acceso público.
-
-### Low coupling / High cohesion en Android
-
-La guía oficial de Android Developers establece que un proyecto bien modularizado debe **limitar el acoplamiento** y que los módulos deben ser lo más independientes posible entre sí.
-
-> 📄 [Guide to Android app modularization — developer.android.com](https://developer.android.com/topic/modularization)
-> 📄 [Common modularization patterns — developer.android.com](https://developer.android.com/topic/modularization/patterns)
-
-### Métricas Ca, Ce e I (Instability)
-
-La Wikipedia en inglés define **Efferent Coupling** y la fórmula de inestabilidad como:
-
-> *I = Fan-out / (Fan-in + Fan-out)*
-
-donde Fan-in equivale a Ca (módulos que dependen de ti) y Fan-out a Ce (módulos de los que depende). Rango [0, 1]: 0 = máxima estabilidad, 1 = máxima inestabilidad.
-
-> 📄 [Efferent coupling — Wikipedia](https://en.wikipedia.org/wiki/Efferent_coupling)
-
-### Stable Dependencies Principle (SDP)
-
-El SDP establece que las dependencias deben apuntar en la dirección de la estabilidad: un módulo estable no debería depender de uno inestable. El artículo de entrofi.net lo cita y lo aplica con ejemplos concretos de Ca/Ce/I (blog técnico, con referencias a *Clean Architecture* de R.C. Martin).
-
-> 📄 [Software Coupling Metrics — entrofi.net](https://www.entrofi.net/coupling-metrics-afferent-and-efferent-coupling/)
-
-El umbral de 0.3 usado para detectar violaciones **no forma parte del SDP original** — es un parámetro configurable para evitar ruido en proyectos pequeños.
-
-### DAGP — Dependency Analysis Gradle Plugin
-
-Herramienta de referencia para análisis de dependencias en proyectos Gradle/Android. Inspiró la detección de scopes mal declarados (`api` vs `implementation`).
-
-> 📄 [dependency-analysis-gradle-plugin — GitHub](https://github.com/autonomousapps/dependency-analysis-gradle-plugin)
-
-### Detección de ciclos
-
-Algoritmo estándar de teoría de grafos: **DFS con coloreo de nodos** (blanco/gris/negro) para detectar back-edges en grafos dirigidos.
-
-### Sobre el score (0–100)
-
-**No es un estándar externo.** Es un mecanismo orientativo con pesos razonables como punto de partida, diseñado para ser ajustado por cada equipo en `analyzer_config.json` bajo `sanity_weights`.
-
----
+Las contribuciones son bienvenidas. Forkeá, creá una rama, commiteá y abrí un PR. Ver [CONTRIBUTING.md](CONTRIBUTING.md) para detalles.
 
 ## 📄 Licencia
 
-MIT License - ver [LICENSE](LICENSE) para más detalles.
-
-## 🙏 Agradecimientos
-
-- [PlantUML](https://plantuml.com/) - Generación de diagramas UML
-- [Mermaid](https://mermaid.js.org/) - Diagramas en Markdown
-
-## 📧 Contacto
-
-¿Preguntas o sugerencias? Abre un [issue](https://github.com/pfranccino/android-gradle-analyzer/issues)
+MIT — ver [LICENSE](LICENSE).
 
 ---
 
-⭐ Si este proyecto te fue útil, considera darle una estrella!
+<div align="center">
+
+made with care · [pfranccino.dev](https://pfranccino.dev)
+
+</div>
