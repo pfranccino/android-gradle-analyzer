@@ -1,0 +1,63 @@
+{
+  "_comentario": "Archivo de EJEMPLO. Para activarlo: cp analyzer_config.example.json analyzer_config.json",
+  "_comentario2": "La herramienta busca 'analyzer_config.json' en el directorio donde la ejecutas (CWD).",
+  "_comentario3": "Todos los campos son opcionales. Los ausentes usan defaults genéricos internos.",
+
+  "icons": {
+    "common": "🔧",
+    "shared": "🔧",
+    "core": "🔧",
+    "gateway": "🌐",
+    "api": "🌐",
+    "network": "📡",
+    "remote": "🌐",
+    "home": "🏠",
+    "main": "🏠",
+    "ui": "🎨",
+    "presentation": "🎨",
+    "screen": "🎨",
+    "domain": "🧩",
+    "usecase": "🧩",
+    "data": "💾",
+    "repository": "💾",
+    "database": "🗄️",
+    "local": "🗄️",
+    "test": "🧪"
+  },
+
+  "styles": {},
+
+  "colors": {
+    "common":  "#FFF9C4",
+    "gateway": "#E1F5FE",
+    "hub":     "#E8F5E9",
+    "cycle":   "#FFCDD2"
+  },
+
+  "scope_weights": {
+    "api":                      "high",
+    "implementation":           "normal",
+    "compileOnly":              "build",
+    "kapt":                     "build",
+    "annotationProcessor":      "build",
+    "testImplementation":       "test",
+    "androidTestImplementation":"test",
+    "testRuntimeOnly":          "test",
+    "debugImplementation":      "debug",
+    "releaseImplementation":    "release",
+    "runtimeOnly":              "runtime"
+  },
+
+  "sanity_weights": {
+    "_comentario": "Penalizaciones para el score de sanidad (base 100). Ajusta según tu contexto.",
+    "_comentario2": "Estos valores NO son un estándar externo — son defaults razonables que puedes cambiar.",
+
+    "cycle":                 20,
+    "sdp_violation":         10,
+    "unnecessary_api":        5,
+    "high_fan_out_threshold": 5,
+    "high_fan_out_penalty":   3,
+    "hardcoded_version":      2,
+    "sdp_threshold":          0.3
+  }
+}

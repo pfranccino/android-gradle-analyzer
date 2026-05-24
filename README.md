@@ -10,13 +10,16 @@ Herramientas para analizar y visualizar dependencias entre módulos en proyectos
 - 🎨 **Colores por tipo** de módulo (common, gateway, features)
 - 📊 **Dos perspectivas**: dependencias internas y llamadas externas
 - 📝 **Reportes detallados** en texto plano
+- ⚠️ **Detección de ciclos** de dependencia
+- 🔭 **Múltiples scopes**: `implementation`, `api`, `kapt`, `compileOnly`, `testImplementation` y más
+- ⚙️ **Configuración personalizable** via `analyzer_config.json`
 
 ## 🚀 Instalación
 
 ### Requisitos
 
 - Python 3.7+
-- PlantUML (opcional, para generar imágenes)
+- PlantUML (opcional, para generar imágenes PNG/SVG)
 
 ### Clonar el repositorio
 
@@ -51,14 +54,38 @@ python3 gradle_analyzer.py <ruta_al_modulo>
 **Ejemplo:**
 
 ```bash
-python3 gradle_analyzer.py /Users/tu-usuario/proyecto/payments
+python3 gradle_analyzer.py /ruta/a/tu/proyecto/payments
+```
+
+**Flags opcionales:**
+
+| Flag | Descripción | Default |
+|---|---|---|
+| `--format plantuml\|mermaid\|all` | Formato de salida | `all` |
+| `--output-dir <dir>` | Directorio donde guardar los archivos | `diagrams` |
+| `--exclude <module>` | Excluir un módulo (puede repetirse) | — |
+| `--config <path>` | Ruta a un `analyzer_config.json` personalizado | auto-detect |
+
+**Ejemplos con flags:**
+
+```bash
+# Solo generar Mermaid
+python3 gradle_analyzer.py /ruta/a/tu/proyecto/payments --format mermaid
+
+# Excluir módulos de test
+python3 gradle_analyzer.py /ruta/a/tu/proyecto/payments --exclude test-utils --exclude mocks
+
+# Usar directorio de salida personalizado (se crean los padres automáticamente)
+python3 gradle_analyzer.py /ruta/a/tu/proyecto/payments --output-dir docs/diagrams
 ```
 
 **Salida:**
 
-- `diagrams/gradle-dependencies.puml` - Diagrama PlantUML
-- `diagrams/gradle-dependencies.mmd` - Diagrama Mermaid
-- `diagrams/gradle-report.txt` - Reporte detallado
+- `diagrams/gradle-dependencies.puml` — Diagrama PlantUML
+- `diagrams/gradle-dependencies.mmd` — Diagrama Mermaid
+- `diagrams/gradle-report.txt` — Reporte detallado
+
+---
 
 ### 2. Analizar Llamadas Externas
 
@@ -71,14 +98,24 @@ python3 external_callers.py <ruta_proyecto> <nombre_modulo>
 **Ejemplo:**
 
 ```bash
-python3 external_callers.py /Users/tu-usuario/proyecto payments
+python3 external_callers.py /ruta/a/tu/android-project payments
 ```
+
+**Flags opcionales:**
+
+| Flag | Descripción | Default |
+|---|---|---|
+| `--format plantuml\|mermaid\|all` | Formato de salida | `all` |
+| `--output-dir <dir>` | Directorio donde guardar los archivos | `external-calls` |
+| `--config <path>` | Ruta a un `analyzer_config.json` personalizado | auto-detect |
 
 **Salida:**
 
 - `external-calls/payments-external-calls.puml`
 - `external-calls/payments-external-calls.mmd`
 - `external-calls/payments-external-report.txt`
+
+---
 
 ### 3. Generar Imágenes
 
@@ -92,6 +129,36 @@ plantuml external-calls/*.puml
 
 # Generar SVG (escalable)
 plantuml -tsvg diagrams/gradle-dependencies.puml
+```
+
+## ⚠️ Detección de Ciclos
+
+Los ciclos de dependencia se detectan automáticamente y se muestran al inicio del reporte:
+
+```
+======================================================================
+⚠️  CICLOS DETECTADOS (1)
+======================================================================
+  Ciclo 1: home → common → home
+```
+
+Los módulos involucrados en un ciclo también aparecen **marcados en rojo** en los diagramas PlantUML y Mermaid.
+
+## 🔭 Dependency Scopes Soportados
+
+| Scope | Categoría visual |
+|---|---|
+| `api`, `implementation`, `compileOnly` | Flecha sólida (compile) |
+| `kapt`, `annotationProcessor` | Flecha punteada (build/procesadores) |
+| `testImplementation`, `androidTestImplementation`, `debugImplementation`, `releaseImplementation`, `runtimeOnly`, `testRuntimeOnly` | Flecha punteada con label (test/debug) |
+
+En el reporte de texto se muestra el scope exacto por cada dependencia:
+
+```
+📦 home
+  → common   [implementation]
+  → common   [kapt]
+  → gateway  [testImplementation]
 ```
 
 ## 📊 Ejemplos de Salida
@@ -129,16 +196,49 @@ Muestra qué módulos externos (app, otros features) usan tu feature:
 └─────────────────────┘
 ```
 
-## 🎨 Personalización
+## ⚙️ Configuración Personalizada
+
+Puedes personalizar colores, íconos y estilos creando un archivo `analyzer_config.json` en el directorio desde donde ejecutas la herramienta. El archivo es **completamente opcional** — sin él, la herramienta usa defaults genéricos para cualquier proyecto Android.
+
+El repositorio incluye `analyzer_config.example.json` con todos los campos disponibles documentados. Para activarlo:
+
+```bash
+cp analyzer_config.example.json analyzer_config.json
+```
+
+**Ejemplo de configuración parcial:**
+
+```json
+{
+  "icons": {
+    "payment": "💸",
+    "cart":    "🛒",
+    "auth":    "🔐"
+  },
+  "colors": {
+    "cycle": "#FF0000"
+  }
+}
+```
+
+Solo necesitas incluir los campos que quieras cambiar — el resto usa los defaults.
+
+**Orden de búsqueda del config:**
+1. `--config <path>` explícito
+2. `analyzer_config.json` en el directorio de trabajo actual
+3. `analyzer_config.json` junto al script
+4. Defaults internos
+
+## 🎨 Personalización del Código
 
 ### Ajustar Espaciado
 
-Edita `gradle_analyzer.py`, líneas ~195-197:
+Edita `gradle_analyzer.py`, sección `generate_plantuml()`:
 
 ```python
-"skinparam nodesep 100",    # Espacio horizontal (default: 60)
-"skinparam ranksep 100",    # Espacio vertical (default: 60)
-"skinparam padding 20",     # Espacio interno (default: 10)
+"skinparam nodesep 150",    # Espacio horizontal (default: 150)
+"skinparam ranksep 150",    # Espacio vertical  (default: 150)
+"skinparam padding 30",     # Espacio interno   (default: 30)
 ```
 
 **Valores sugeridos:**
@@ -147,37 +247,20 @@ Edita `gradle_analyzer.py`, líneas ~195-197:
 - **Balanceado**: 100, 100, 20
 - **Espacioso**: 150, 150, 30
 
-### Agregar Nuevos Tipos de Módulos
-
-Edita la función `get_style()` en `gradle_analyzer.py`:
-
-```python
-def get_style(module):
-    if module == 'common':
-        return ' <<common>>'
-    elif 'payment' in module:
-        return ' <<payment>>'  # Nuevo tipo
-    # ...
-```
-
-Luego agrega el color:
-
-```python
-"skinparam classBackgroundColor<<payment>> #FFCDD2",
-```
-
 ## 📋 Estructura del Proyecto
 
 ```
 android-gradle-analyzer/
 ├── README.md                  ← Documentación principal
 ├── LICENSE                    ← Licencia MIT
-├── .gitignore                 ← Archivos a ignorar
+├── .gitignore
 ├── CONTRIBUTING.md            ← Guía para contribuir
 ├── EXAMPLES.md                ← Ejemplos de uso
 ├── setup.sh                   ← Script de configuración
-├── gradle_analyzer.py         ← Script principal 1
-└── external_callers.py        ← Script principal 2
+├── analyzer_utils.py          ← Utilidades compartidas
+├── analyzer_config.example.json ← Configuración de ejemplo (cp → analyzer_config.json para activar)
+├── gradle_analyzer.py         ← Script principal 1: dependencias internas
+└── external_callers.py        ← Script principal 2: llamadas externas
 ```
 
 ## 🔧 Cómo Funciona
@@ -191,18 +274,20 @@ android-gradle-analyzer/
 ### Extracción de Dependencias
 
 1. Lee el contenido completo de cada `build.gradle`
-2. Aplica **regex** para encontrar patrones como:
+2. Aplica **regex** para encontrar todos los scopes:
    ```kotlin
-   implementation project(path: ':my-feature:common')
+   implementation project(":my-feature:common")
    api(project(":my-feature:gateway"))
+   kapt project(':my-feature:common')
    ```
-3. Normaliza los paths y almacena las relaciones
+3. Normaliza los paths y almacena las relaciones por scope
 
 ### Generación de Diagramas
 
 1. Clasifica módulos por tipo (common, gateway, features)
 2. Aplica colores según la clasificación
-3. Genera código PlantUML/Mermaid con las dependencias
+3. Genera código PlantUML/Mermaid con las dependencias agrupadas por categoría visual
+4. Marca en rojo los módulos involucrados en ciclos
 
 ## 🤝 Contribuir
 
@@ -233,19 +318,19 @@ Las contribuciones son bienvenidas! Por favor:
 
 ### Diagrama se ve muy apretado
 
-**Solución**: Aumenta los valores de espaciado:
+**Solución**: Aumenta los valores de espaciado en `generate_plantuml()`:
 
 ```python
-"skinparam nodesep 150",
-"skinparam ranksep 150",
-"skinparam padding 30",
+"skinparam nodesep 200",
+"skinparam ranksep 200",
+"skinparam padding 40",
 ```
 
 ### No detecta algunas dependencias
 
-**Causa**: El formato del gradle puede ser diferente
+**Causa**: El formato del gradle puede ser diferente al estándar
 
-**Solución**: Verifica los patrones regex en `_parse_gradle_file()` y agrega el formato que usa tu proyecto.
+**Solución**: Verifica los patrones regex en `analyzer_utils.py` (constante `DEPENDENCY_SCOPES`) y agrega el formato que usa tu proyecto.
 
 ## 📄 Licencia
 
