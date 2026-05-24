@@ -12,6 +12,7 @@ Herramientas para analizar y visualizar dependencias entre módulos en proyectos
 - 📝 **Reportes detallados** en texto plano
 - ⚠️ **Detección de ciclos** de dependencia
 - 🔭 **Múltiples scopes**: `implementation`, `api`, `kapt`, `compileOnly`, `testImplementation` y más
+- 🏥 **Análisis de sanidad** con métricas de acoplamiento y score configurable
 - ⚙️ **Configuración personalizable** via `analyzer_config.json`
 
 ## 🚀 Instalación
@@ -117,7 +118,74 @@ python3 external_callers.py /ruta/a/tu/android-project payments
 
 ---
 
-### 3. Generar Imágenes
+### 3. Analizar Sanidad de Dependencias
+
+Mide la **salud arquitectónica** del módulo calculando métricas de acoplamiento y detectando anti-patrones. Genera un score de 0 a 100 con explicación de cada problema encontrado.
+
+```bash
+python3 gradle_sanity.py <ruta_al_modulo>
+```
+
+**Ejemplo:**
+
+```bash
+python3 gradle_sanity.py /ruta/a/tu/proyecto/payments
+```
+
+**Flags opcionales:**
+
+| Flag | Descripción | Default |
+|---|---|---|
+| `--output-dir <dir>` | Directorio donde guardar el reporte | `sanity` |
+| `--config <path>` | Ruta a un `analyzer_config.json` personalizado | auto-detect |
+
+**Salida:** `sanity/sanity-report.txt`
+
+**Ejemplo de reporte:**
+
+```
+MÉTRICAS POR MÓDULO
+
+  Módulo          Ca   Ce     I    Estado
+  ──────────────  ───  ───  ────   ──────────────────────────
+  common           3    0   0.00   🟢 Estable
+  gateway          1    1   0.50   🟡 Moderadamente estable
+  home             1    2   0.67   🟠 Moderadamente inestable
+  ui               0    2   1.00   🔴 Inestable (módulo hoja)
+
+VIOLACIONES DETECTADAS
+
+🔴 CICLOS (0)            — sin ciclos ✅
+🟠 VIOLACIONES SDP (0)   — sin violaciones ✅
+🟡 API INNECESARIO (1)   — ui usa api pero Ca=0
+🔵 VERSIONES HARD. (2)   — gateway, home
+
+PUNTUACIÓN FINAL: 91 / 100  🟢 Excelente
+```
+
+**¿Qué mide cada columna?**
+
+| Columna | Significado |
+|---|---|
+| **Ca** | Cuántos módulos dependen de este (flechas que llegan). Alto en `common`, `core`. |
+| **Ce** | Cuántos módulos usa este (flechas que salen). Alto en `app`, features de alto nivel. |
+| **I** | `Ce / (Ce + Ca)`. 0 = muy estable, 1 = muy inestable. Lo importante es la dirección: las dependencias deben ir de I alto → I bajo. |
+
+**¿Qué detecta?**
+
+| Problema | Penalización default | Descripción |
+|---|---|---|
+| Ciclo | -20 pts | A depende de B y B depende de A |
+| Violación SDP | -10 pts | Módulo estable (I bajo) depende de uno inestable (I alto) |
+| `api` innecesario | -5 pts | Usa `api` pero Ca=0, nadie consume esas deps transitivas |
+| Fan-out excesivo | -3 pts | Ce supera el umbral (default: 5) |
+| Versión hardcodeada | -2 pts | `"lib:x:1.2.3"` en lugar de Version Catalog |
+
+Los pesos son **configurables** en `analyzer_config.json` bajo `sanity_weights`.
+
+---
+
+### 4. Generar Imágenes
 
 ```bash
 # Convertir .puml a PNG
@@ -226,8 +294,7 @@ Solo necesitas incluir los campos que quieras cambiar — el resto usa los defau
 **Orden de búsqueda del config:**
 1. `--config <path>` explícito
 2. `analyzer_config.json` en el directorio de trabajo actual
-3. `analyzer_config.json` junto al script
-4. Defaults internos
+3. Defaults internos
 
 ## 🎨 Personalización del Código
 
@@ -259,8 +326,9 @@ android-gradle-analyzer/
 ├── setup.sh                   ← Script de configuración
 ├── analyzer_utils.py          ← Utilidades compartidas
 ├── analyzer_config.example.json ← Configuración de ejemplo (cp → analyzer_config.json para activar)
-├── gradle_analyzer.py         ← Script principal 1: dependencias internas
-└── external_callers.py        ← Script principal 2: llamadas externas
+├── gradle_analyzer.py           ← Script 1: dependencias internas + diagramas
+├── external_callers.py          ← Script 2: qué módulos externos llaman a este
+└── gradle_sanity.py             ← Script 3: métricas de acoplamiento y score de sanidad
 ```
 
 ## 🔧 Cómo Funciona
@@ -302,7 +370,8 @@ Las contribuciones son bienvenidas! Por favor:
 ## 📝 Casos de Uso
 
 - ✅ Documentar arquitectura de proyectos multi-módulo
-- ✅ Detectar dependencias circulares
+- ✅ Detectar dependencias circulares y violaciones SDP
+- ✅ Medir y mejorar la salud arquitectónica con score de sanidad
 - ✅ Identificar módulos altamente acoplados
 - ✅ Auditar dependencias antes de refactorizar
 - ✅ Onboarding de nuevos desarrolladores
