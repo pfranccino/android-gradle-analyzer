@@ -60,20 +60,41 @@ def main_menu() -> str | None:
 
 def ask_project_path(prompt: str = "Ruta al proyecto Android") -> str | None:
     """
-    Solicita la ruta del proyecto con el último usado como default.
-    Devuelve None si el usuario cancela (Esc o string vacío).
+    Solicita la ruta del proyecto.
+    Usa un select previo para garantizar que ← Volver funcione en Windows.
+    Devuelve None si el usuario cancela.
     """
-    default = get_last_project() or ""
+    last = get_last_project()
+    _NEW = "__new_path__"
+
+    # Siempre arrancamos con un select — es confiable en Windows (Esc → None)
+    choices: list = []
+    if last:
+        choices.append(questionary.Choice(f"📁  {last}", value=last))
+    choices.append(questionary.Choice("📂  Ingresar nueva ruta...", value=_NEW))
+    choices.append(questionary.Separator())
+    choices.append(questionary.Choice("← Volver", value=BACK))
+
+    sel = questionary.select(
+        prompt,
+        choices=choices,
+        style=_STYLE,
+        use_shortcuts=False,
+        instruction="(↑↓  ↵ elegir  Esc cancelar)",
+    ).ask()
+
+    if sel is None or sel == BACK:
+        return None
+    if sel != _NEW:
+        return sel  # usó el último proyecto
+
+    # Ingreso manual de ruta
     answer = questionary.path(
-        f"{prompt}:",
-        default=default,
+        "Ruta al proyecto:",
         only_directories=True,
         style=_STYLE,
     ).ask()
-    # questionary.path devuelve None con Esc, o "" si borra y confirma
-    if not answer:
-        return None
-    return answer
+    return answer if answer else None
 
 
 # ── Pedir módulo target ───────────────────────────────────────────────────────
@@ -83,26 +104,42 @@ def ask_module(modules: list[str], prompt: str = "Módulo a analizar") -> str | 
     Muestra la lista de módulos detectados con opción ← Volver.
     Devuelve None si el usuario cancela o elige Volver.
     """
+    back_choice = questionary.Choice("← Volver", value=BACK)
+
     if not modules:
-        answer = questionary.text(
-            f"{prompt} (nombre del módulo):",
+        # Sin módulos detectados: select mínimo con opción libre
+        _MANUAL = "__manual__"
+        sel = questionary.select(
+            f"{prompt}:",
+            choices=[
+                questionary.Choice("✏️  Ingresar nombre manualmente", value=_MANUAL),
+                questionary.Separator(),
+                back_choice,
+            ],
             style=_STYLE,
+            use_shortcuts=False,
+            instruction="(↑↓  ↵ elegir  Esc cancelar)",
         ).ask()
+        if sel is None or sel == BACK:
+            return None
+        answer = questionary.text(f"{prompt} (nombre del módulo):", style=_STYLE).ask()
         return answer or None
 
     last = get_last_module()
     default = last if last in modules else (modules[0] if modules else None)
 
-    back_choice = questionary.Choice("← Volver", value=BACK)
-
     if len(modules) > 15:
+        # Autocomplete con ← Volver como opción seleccionable
+        choices_with_back = modules + ["← Volver"]
         answer = questionary.autocomplete(
             f"{prompt}:",
-            choices=modules,
+            choices=choices_with_back,
             default=default or "",
             style=_STYLE,
         ).ask()
-        return answer if answer and answer != BACK else None
+        if answer is None or answer == "← Volver":
+            return None
+        return answer
     else:
         choices = modules + [questionary.Separator(), back_choice]
         answer = questionary.select(
