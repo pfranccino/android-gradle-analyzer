@@ -23,11 +23,16 @@ pipx install git+https://github.com/pfranccino/android-gradle-analyzer.git
 # 1 · Dependencias internas de un módulo
 gradle-analyzer /ruta/a/tu/proyecto/payments
 
+# También podés usar . si ya estás parado en el módulo
+cd /ruta/a/tu/proyecto/payments
+gradle-analyzer .
+
 # 2 · Quién llama a un módulo desde fuera
 gradle-externals /ruta/a/tu/proyecto payments
 
 # 3 · Score de sanidad (Ca/Ce/I, ciclos, anti-patrones)
 gradle-sanity /ruta/a/tu/proyecto/payments
+gradle-sanity .   # equivalente si ya estás en el módulo
 ```
 
 <details>
@@ -243,8 +248,23 @@ choco install plantuml         # Windows
 
 ## 🎨 Configuración personalizada
 
-Sin config, el analizador usa defaults genéricos para cualquier proyecto Android. Si querés personalizar colores, íconos y estilos:
+Sin config, el analizador usa defaults genéricos para cualquier proyecto Android. La configuración es **opt-in**: la herramienta funciona sin ningún archivo de config.
 
+Si querés personalizar colores, íconos y estilos, creá un `analyzer_config.json` en el directorio desde donde corrés el comando:
+
+**Instalado con pipx:**
+```bash
+# macOS / Linux
+curl -o analyzer_config.json \
+  https://raw.githubusercontent.com/pfranccino/android-gradle-analyzer/main/analyzer_config.example.json
+
+# Windows (PowerShell)
+Invoke-WebRequest `
+  -Uri "https://raw.githubusercontent.com/pfranccino/android-gradle-analyzer/main/analyzer_config.example.json" `
+  -OutFile "analyzer_config.json"
+```
+
+**Con el repo clonado:**
 ```bash
 cp analyzer_config.example.json analyzer_config.json
 ```
@@ -269,8 +289,10 @@ Solo incluí los campos que querés cambiar — el resto usa defaults.
 
 **Orden de búsqueda:**
 1. `--config <path>` explícito
-2. `analyzer_config.json` en el directorio actual
+2. `analyzer_config.json` en el directorio actual (donde corrés el comando)
 3. Defaults internos
+
+> **Tip:** si siempre analizás el mismo proyecto, poné el `analyzer_config.json` en la raíz de ese proyecto y corré el comando desde ahí. Si analizás varios proyectos, usá `--config ~/mi-config.json`.
 
 </details>
 
