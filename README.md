@@ -401,6 +401,39 @@ Las contribuciones son bienvenidas! Por favor:
 
 **Solución**: Verifica los patrones regex en `analyzer_utils.py` (constante `DEPENDENCY_SCOPES`) y agrega el formato que usa tu proyecto.
 
+## 📚 Referencias — Análisis de Sanidad
+
+Las métricas implementadas en `gradle_sanity.py` están basadas en fuentes académicas e industriales consolidadas, no en valores inventados.
+
+### Métricas de acoplamiento (Ca, Ce, I)
+
+Definidas por **Robert C. Martin** en *"Agile Software Development: Principles, Patterns, and Practices"* (2002), capítulo de *Package Design Principles*. Son las mismas métricas que usan herramientas como **SonarQube**, **NDepend** y **Structure101**.
+
+- **Ca** (Afferent Coupling) y **Ce** (Efferent Coupling): métricas clásicas de acoplamiento entre módulos/paquetes.
+- **I** (Instability = Ce / Ce+Ca): mide la resistencia al cambio de un módulo.
+
+### SDP — Stable Dependencies Principle
+
+También de Robert C. Martin, parte de los *Package Principles* (junto a SRP, OCP, etc.). Establece que **las dependencias deben apuntar en la dirección de la estabilidad**. Es un principio binario: o se viola o no. El umbral de 0.3 usado para detectarlo es configurable y no forma parte del estándar original.
+
+> Referencia: [codinghelmet.com — How to Measure Module Coupling and Instability](https://codinghelmet.com/articles/how-to-measure-module-coupling-and-instability-using-ndepend)
+
+### Detección de ciclos
+
+Los ciclos de dependencia son universalmente considerados el problema más grave en arquitectura de módulos. La detección usa **DFS con coloreo de nodos** (blanco/gris/negro), algoritmo estándar de teoría de grafos para detección de back-edges en grafos dirigidos.
+
+### DAGP — Dependency Analysis Gradle Plugin
+
+Herramienta de referencia para análisis de dependencias en proyectos Gradle/Android. Inspiró la detección de scopes mal declarados (`api` vs `implementation`).
+
+> Repositorio: [github.com/autonomousapps/dependency-analysis-gradle-plugin](https://github.com/autonomousapps/dependency-analysis-gradle-plugin)
+
+### Sobre el score (0–100)
+
+El sistema de puntuación **no es un estándar externo**. Es un mecanismo orientativo con defaults razonables, diseñado para ser ajustado por cada equipo según su contexto. Los pesos son configurables en `analyzer_config.json` bajo `sanity_weights`. Herramientas como SonarQube utilizan un sistema similar pero expresado en "deuda técnica" (horas de trabajo) en lugar de puntos.
+
+---
+
 ## 📄 Licencia
 
 MIT License - ver [LICENSE](LICENSE) para más detalles.
