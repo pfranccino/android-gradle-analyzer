@@ -158,10 +158,6 @@ def print_history_table(history: list[dict]) -> None:
 
 # ── Print summary text ────────────────────────────────────────────────────────
 
-def print_summary(summary: str, max_lines: int = 30) -> None:
-    """Muestra el resumen del análisis, truncado a max_lines."""
-    lines = summary.splitlines()
-    shown = "\n".join(lines[:max_lines])
-    if len(lines) > max_lines:
-        shown += f"\n[dim]... ({len(lines) - max_lines} líneas más en el archivo generado)[/dim]"
-    console.print(Panel(shown, title="📄 Resumen", border_style="dim", padding=(0, 1)))
+def print_summary(summary: str) -> None:
+    """Muestra el resumen completo del análisis."""
+    console.print(Panel(summary, title="📄 Resumen", border_style="dim", padding=(0, 1)))
