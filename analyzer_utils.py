@@ -9,6 +9,35 @@ from pathlib import Path
 from collections import defaultdict
 
 
+# ─── Detección de módulos ──────────────────────────────────────────────────
+
+def list_modules(base_path) -> list:
+    """
+    Devuelve la lista de módulos detectados en base_path escaneando
+    build.gradle / build.gradle.kts recursivamente.
+
+    Args:
+        base_path: str o Path al directorio raíz del proyecto Android.
+
+    Returns:
+        list[str] de nombres de módulo (ej. ['payments:common', 'payments:home'])
+    """
+    base = Path(base_path)
+    modules = []
+    for gradle_file in sorted(base.rglob("build.gradle*")):
+        module_dir = gradle_file.parent
+        try:
+            rel_path    = module_dir.relative_to(base)
+            module_name = str(rel_path).replace("/", ":").replace("\\", ":")
+            if module_name == ".":
+                continue
+            if module_name not in modules:
+                modules.append(module_name)
+        except ValueError:
+            continue
+    return modules
+
+
 # ─── Patrones de dependencias ──────────────────────────────────────────────
 
 def _build_patterns(scope: str) -> list:

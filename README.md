@@ -4,6 +4,7 @@ Herramientas para analizar y visualizar dependencias entre módulos en proyectos
 
 ## 🎯 Características
 
+- 🎛️ **Menú interactivo** con `python3 menu.py` — un único comando para todo
 - ✅ **Análisis automático** de dependencias leyendo archivos `build.gradle` / `build.gradle.kts`
 - 🔍 **Detección recursiva** de todos los módulos sin importar la profundidad
 - 📈 **Visualización clara** con diagramas PlantUML y Mermaid
@@ -13,7 +14,29 @@ Herramientas para analizar y visualizar dependencias entre módulos en proyectos
 - ⚠️ **Detección de ciclos** de dependencia
 - 🔭 **Múltiples scopes**: `implementation`, `api`, `kapt`, `compileOnly`, `testImplementation` y más
 - 🏥 **Análisis de sanidad** con métricas de acoplamiento y score configurable
+- 📤 **Export** a HTML / Markdown / ZIP (PDF opcional con weasyprint)
+- 💾 **Memoria de sesión**: recuerda el último proyecto en `~/.gradle-analyzer/state.json`
 - ⚙️ **Configuración personalizable** via `analyzer_config.json`
+
+## 🎛️ Modo interactivo
+
+```bash
+python3 menu.py
+```
+
+Menú visual con todos los análisis, autodetección de módulos, exportación
+a HTML / Markdown / ZIP y memoria del último proyecto usado.
+
+**Modo no-interactivo (CI/scripts):**
+```bash
+python3 menu.py --quick sanity /ruta/proyecto
+python3 menu.py --quick internal /ruta/modulo
+python3 menu.py --version
+```
+
+**Requisitos extra:** `pip install -r requirements.txt`
+
+---
 
 ## 🚀 Instalación
 
@@ -28,6 +51,14 @@ Herramientas para analizar y visualizar dependencias entre módulos en proyectos
 git clone https://github.com/pfranccino/android-gradle-analyzer.git
 cd android-gradle-analyzer
 ```
+
+### Instalar dependencias Python (para el menú interactivo)
+
+```bash
+pip install -r requirements.txt
+```
+
+> O usando el script de setup: `bash setup.sh`
 
 ### Instalar PlantUML (opcional)
 

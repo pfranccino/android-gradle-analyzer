@@ -1,0 +1,3 @@
+questionary>=2.0
+rich>=13.7
+weasyprint  # optional: PDF export (install manually if needed)
