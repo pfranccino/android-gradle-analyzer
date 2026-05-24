@@ -7,6 +7,8 @@ Principio de navegación:
   - El valor sentinel BACK indica "volver un nivel".
 """
 
+import sys
+
 import questionary
 from questionary import Style
 
@@ -61,13 +63,24 @@ def main_menu() -> str | None:
 def ask_project_path(prompt: str = "Ruta al proyecto Android") -> str | None:
     """
     Solicita la ruta del proyecto.
-    Usa un select previo para garantizar que ← Volver funcione en Windows.
+    - Windows: siempre muestra un select primero (Esc confiable).
+    - macOS/Linux sin último proyecto: va directo al prompt de path (Esc funciona).
+    - macOS/Linux con último proyecto: muestra el select para reusar o cambiar.
     Devuelve None si el usuario cancela.
     """
     last = get_last_project()
     _NEW = "__new_path__"
 
-    # Siempre arrancamos con un select — es confiable en Windows (Esc → None)
+    # macOS/Linux sin último proyecto → directo al path prompt (Esc funciona bien)
+    if sys.platform != "win32" and not last:
+        answer = questionary.path(
+            f"{prompt}:",
+            only_directories=True,
+            style=_STYLE,
+        ).ask()
+        return answer if answer else None
+
+    # Windows (siempre) o cualquier plataforma con último proyecto → select primero
     choices: list = []
     if last:
         choices.append(questionary.Choice(f"📁  {last}", value=last))
@@ -86,7 +99,7 @@ def ask_project_path(prompt: str = "Ruta al proyecto Android") -> str | None:
     if sel is None or sel == BACK:
         return None
     if sel != _NEW:
-        return sel  # usó el último proyecto
+        return sel  # reutilizó el último proyecto
 
     # Ingreso manual de ruta
     answer = questionary.path(
@@ -233,12 +246,16 @@ def ask_history_entry(history: list[dict]) -> dict | None:
         for e in history
     ]
     choices.append(questionary.Separator())
-    choices.append(questionary.Choice("← Volver", value=None))
+    choices.append(questionary.Choice("← Volver", value=BACK))
 
-    return questionary.select(
+    result = questionary.select(
         "Seleccioná un análisis del historial:",
         choices=choices,
         style=_STYLE,
         use_shortcuts=False,
         instruction="(↑↓  ↵ elegir  Esc cancelar)",
     ).ask()
+    # BACK (sentinel) y None (Esc) → cancelar
+    if result is None or result == BACK:
+        return None
+    return result
