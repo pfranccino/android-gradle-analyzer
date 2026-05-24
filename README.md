@@ -401,12 +401,17 @@ Instalá las dependencias: `pip install -r requirements.txt`
 Las métricas de `gradle_sanity.py` están basadas en fuentes verificadas:
 
 - **Low coupling / High cohesion en Android** — [Guide to Android app modularization](https://developer.android.com/topic/modularization) · [Common modularization patterns](https://developer.android.com/topic/modularization/patterns)
-- **Métricas Ca, Ce, I** — [Efferent coupling — Wikipedia](https://en.wikipedia.org/wiki/Efferent_coupling). `I = Fan-out / (Fan-in + Fan-out)`, rango [0, 1].
-- **Stable Dependencies Principle** — [Software Coupling Metrics — entrofi.net](https://www.entrofi.net/coupling-metrics-afferent-and-efferent-coupling/). El umbral 0.3 es un parámetro configurable, no parte del SDP original.
+- **Métricas Ca, Ce, I y principios de acoplamiento de paquetes** — formulados por **Robert C. Martin (Uncle Bob)** en *Agile Software Development: Principles, Patterns, and Practices* (2002), capítulo sobre Package Design Principles. Los tres principios de acoplamiento son:
+  - **ADP** (Acyclic Dependencies Principle) — el grafo de dependencias entre módulos no debe tener ciclos.
+  - **SDP** (Stable Dependencies Principle) — un módulo solo debe depender de módulos más estables que él mismo.
+  - **SAP** (Stable Abstractions Principle) — los módulos más estables deben ser los más abstractos.
+  - La fórmula `I = Ce / (Ce + Ca)` cuantifica estabilidad: `0` = imposible de desestabilizar, `1` = completamente inestable.
+  - Ver también: [Efferent coupling — Wikipedia](https://en.wikipedia.org/wiki/Efferent_coupling) · [Software Coupling Metrics — entrofi.net](https://www.entrofi.net/coupling-metrics-afferent-and-efferent-coupling/)
+- **Aplicación a módulos Android** — Martin definió estas métricas para *packages* en Java/C++. En proyectos Android multi-módulo, cada módulo Gradle cumple el mismo rol que un package en su modelo (unidad de compilación y encapsulamiento), por lo que la semántica es directamente trasladable.
 - **DAGP** — [dependency-analysis-gradle-plugin](https://github.com/autonomousapps/dependency-analysis-gradle-plugin). Inspiró la detección de scopes mal declarados.
 - **Detección de ciclos** — DFS con coloreo de nodos (blanco/gris/negro).
 
-> El **score 0–100 no es un estándar externo.** Es orientativo con pesos razonables como punto de partida, ajustables en `analyzer_config.json` bajo `sanity_weights`.
+> El **score 0–100 no es un estándar externo.** Es orientativo con pesos razonables como punto de partida, ajustables en `analyzer_config.json` bajo `sanity_weights`. El umbral SDP de 0.3 tampoco es parte del principio original — es un parámetro configurable.
 
 </details>
 
