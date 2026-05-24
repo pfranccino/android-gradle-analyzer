@@ -101,10 +101,12 @@ def parse_gradle_file_scoped(gradle_file, known_modules, self_module):
 
                     # Buscar coincidencia en módulos conocidos
                     for known_module in known_modules:
+                        normalized_path   = project_path.replace('/', ':')
+                        normalized_module = known_module.replace('/', ':')
                         if (
-                            project_path.endswith(known_module) or
-                            known_module.endswith(project_path) or
-                            project_path.replace(':', '/') == known_module.replace(':', '/')
+                            normalized_path == normalized_module or
+                            normalized_module.endswith(':' + normalized_path) or
+                            normalized_path.endswith(':' + normalized_module)
                         ):
                             if known_module != self_module:
                                 result[scope].add(known_module)
@@ -288,23 +290,30 @@ def detect_cycles(dependencies: dict) -> list:
     for deps in flat_deps.values():
         all_nodes.update(deps)
 
-    color = {node: _WHITE for node in all_nodes}
+    color  = {node: _WHITE for node in all_nodes}
     parent: dict = {}
     cycles: list = []
 
-    def dfs(u: str) -> None:
-        color[u] = _GRAY
-        for v in sorted(flat_deps.get(u, set())):
-            if color.get(v, _WHITE) == _GRAY:
-                cycles.append(_reconstruct_cycle(parent, u, v))
-            elif color.get(v, _WHITE) == _WHITE:
-                parent[v] = u
-                dfs(v)
-        color[u] = _BLACK
-
-    for node in sorted(all_nodes):
-        if color[node] == _WHITE:
-            dfs(node)
+    for start in sorted(all_nodes):
+        if color[start] != _WHITE:
+            continue
+        stack = [(start, False)]   # (nodo, ¿retornando?)
+        while stack:
+            u, returning = stack.pop()
+            if returning:
+                color[u] = _BLACK
+                continue
+            if color.get(u) == _GRAY:
+                continue
+            color[u] = _GRAY
+            stack.append((u, True))
+            for v in sorted(flat_deps.get(u, set())):
+                cv = color.get(v, _WHITE)
+                if cv == _GRAY:
+                    cycles.append(_reconstruct_cycle(parent, u, v))
+                elif cv == _WHITE:
+                    parent[v] = u
+                    stack.append((v, False))
 
     return cycles
 

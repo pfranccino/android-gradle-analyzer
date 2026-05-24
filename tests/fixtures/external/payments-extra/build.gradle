@@ -1,0 +1,7 @@
+plugins {
+    id 'com.android.library'
+}
+
+dependencies {
+    // sin dependencias a payments — módulo con nombre ambiguo para verificar el bug startswith
+}

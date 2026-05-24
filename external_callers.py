@@ -50,7 +50,7 @@ class ExternalCallersAnalyzer:
 
                 self.all_modules.append(module_name)
 
-                if module_name.startswith(self.target_module):
+                if module_name == self.target_module or module_name.startswith(self.target_module + ':'):
                     self.internal_modules.append(module_name)
                     print(f"  ✓ [INTERNO] {module_name}")
                 else:
@@ -69,7 +69,7 @@ class ExternalCallersAnalyzer:
         print(f"🔍 Buscando quién llama a '{self.target_module}'...\n")
 
         for module in self.all_modules:
-            if module.startswith(self.target_module):
+            if module == self.target_module or module.startswith(self.target_module + ':'):
                 continue
 
             module_path = self.project_root / module.replace(':', '/')
