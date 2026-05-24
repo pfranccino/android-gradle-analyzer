@@ -4,6 +4,7 @@ Tests para ExternalCallersAnalyzer:
   - analyze_external_calls: detecta las llamadas externas reales
 """
 
+import pytest
 from pathlib import Path
 
 from external_callers import ExternalCallersAnalyzer
@@ -13,53 +14,44 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 class TestExternalCallersAnalyzer:
 
-    def _build_analyzer(self):
-        return ExternalCallersAnalyzer(
+    @pytest.fixture
+    def scanned(self):
+        """Analyzer con scan_all_modules() ya ejecutado."""
+        analyzer = ExternalCallersAnalyzer(
             project_root=str(FIXTURES / "external"),
             target_module="payments",
         )
+        analyzer.scan_all_modules()
+        return analyzer
 
-    def test_internal_modules_exact_match(self):
+    def test_internal_modules_exact_match(self, scanned):
         """
         Bug 2: solo 'payments' y 'payments:gateway' son internos.
         'payments-extra' NO debe clasificarse como interno.
         """
-        analyzer = self._build_analyzer()
-        analyzer.scan_all_modules()
+        assert "payments" in scanned.internal_modules
+        assert "payments:gateway" in scanned.internal_modules
 
-        assert "payments" in analyzer.internal_modules
-        assert "payments:gateway" in analyzer.internal_modules
-
-    def test_no_false_internal_from_prefix(self):
+    def test_no_false_internal_from_prefix(self, scanned):
         """
         Bug 2: 'payments-extra' tiene nombre que empieza con 'payments'
         pero NO es un submódulo — debe quedar como externo.
         """
-        analyzer = self._build_analyzer()
-        analyzer.scan_all_modules()
+        assert "payments-extra" not in scanned.internal_modules
 
-        assert "payments-extra" not in analyzer.internal_modules
-
-    def test_app_is_external(self):
+    def test_app_is_external(self, scanned):
         """'app' es un módulo externo — no debe estar en internal_modules."""
-        analyzer = self._build_analyzer()
-        analyzer.scan_all_modules()
+        assert "app" not in scanned.internal_modules
 
-        assert "app" not in analyzer.internal_modules
-
-    def test_detects_external_call(self):
+    def test_detects_external_call(self, scanned):
         """app llama a payments:gateway — debe aparecer en external_callers."""
-        analyzer = self._build_analyzer()
-        analyzer.scan_all_modules()
-        analyzer.analyze_external_calls()
+        scanned.analyze_external_calls()
 
-        assert "app" in analyzer.external_callers
-        assert "payments:gateway" in analyzer.external_callers["app"]
+        assert "app" in scanned.external_callers
+        assert "payments:gateway" in scanned.external_callers["app"]
 
-    def test_payments_extra_generates_no_call(self):
+    def test_payments_extra_generates_no_call(self, scanned):
         """payments-extra no tiene deps a payments — no debe aparecer en external_callers."""
-        analyzer = self._build_analyzer()
-        analyzer.scan_all_modules()
-        analyzer.analyze_external_calls()
+        scanned.analyze_external_calls()
 
-        assert "payments-extra" not in analyzer.external_callers
+        assert "payments-extra" not in scanned.external_callers

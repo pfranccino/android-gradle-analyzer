@@ -12,6 +12,8 @@ from analyzer_utils import (
     parse_gradle_file_scoped,
     load_config,
     get_icon,
+    normalize_module_name,
+    is_submodule_of,
 )
 
 
@@ -43,14 +45,14 @@ class ExternalCallersAnalyzer:
             module_dir = gradle_file.parent
             try:
                 rel_path    = module_dir.relative_to(self.project_root)
-                module_name = str(rel_path).replace('/', ':').replace('\\', ':')
+                module_name = normalize_module_name(str(rel_path))
 
                 if module_name == '.':
                     continue
 
                 self.all_modules.append(module_name)
 
-                if module_name == self.target_module or module_name.startswith(self.target_module + ':'):
+                if is_submodule_of(module_name, self.target_module):
                     self.internal_modules.append(module_name)
                     print(f"  ✓ [INTERNO] {module_name}")
                 else:
@@ -69,7 +71,7 @@ class ExternalCallersAnalyzer:
         print(f"🔍 Buscando quién llama a '{self.target_module}'...\n")
 
         for module in self.all_modules:
-            if module == self.target_module or module.startswith(self.target_module + ':'):
+            if is_submodule_of(module, self.target_module):
                 continue
 
             module_path = self.project_root / module.replace(':', '/')

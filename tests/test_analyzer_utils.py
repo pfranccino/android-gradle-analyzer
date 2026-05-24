@@ -4,7 +4,6 @@ Tests para analyzer_utils.py:
   - detect_cycles: verifica detección correcta de ciclos directos e indirectos (bug 3)
 """
 
-import pytest
 from pathlib import Path
 
 from analyzer_utils import parse_gradle_file_scoped, detect_cycles

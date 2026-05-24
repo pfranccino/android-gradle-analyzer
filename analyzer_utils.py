@@ -28,7 +28,7 @@ def list_modules(base_path) -> list:
         module_dir = gradle_file.parent
         try:
             rel_path    = module_dir.relative_to(base)
-            module_name = str(rel_path).replace("/", ":").replace("\\", ":")
+            module_name = normalize_module_name(str(rel_path))
             if module_name == ".":
                 continue
             if module_name not in modules:
@@ -36,6 +36,16 @@ def list_modules(base_path) -> list:
         except ValueError:
             continue
     return modules
+
+
+def normalize_module_name(path: str) -> str:
+    """Convierte separadores '/' y '\\' a ':' para la forma canónica de módulo."""
+    return path.replace('/', ':').replace('\\', ':')
+
+
+def is_submodule_of(module: str, parent: str) -> bool:
+    """True si module es parent o un submódulo directo/anidado de parent."""
+    return module == parent or module.startswith(parent + ':')
 
 
 # ─── Patrones de dependencias ──────────────────────────────────────────────
@@ -99,10 +109,9 @@ def parse_gradle_file_scoped(gradle_file, known_modules, self_module):
                     if project_path.startswith(':'):
                         project_path = project_path[1:]
 
-                    # Buscar coincidencia en módulos conocidos
+                    normalized_path = normalize_module_name(project_path)
                     for known_module in known_modules:
-                        normalized_path   = project_path.replace('/', ':')
-                        normalized_module = known_module.replace('/', ':')
+                        normalized_module = normalize_module_name(known_module)
                         if (
                             normalized_path == normalized_module or
                             normalized_module.endswith(':' + normalized_path) or
@@ -297,18 +306,18 @@ def detect_cycles(dependencies: dict) -> list:
     for start in sorted(all_nodes):
         if color[start] != _WHITE:
             continue
-        stack = [(start, False)]   # (nodo, ¿retornando?)
+        stack = [(start, False)]
         while stack:
             u, returning = stack.pop()
             if returning:
                 color[u] = _BLACK
                 continue
-            if color.get(u) == _GRAY:
+            if color[u] == _GRAY:
                 continue
             color[u] = _GRAY
             stack.append((u, True))
-            for v in sorted(flat_deps.get(u, set())):
-                cv = color.get(v, _WHITE)
+            for v in sorted(flat_deps.get(u, ())):
+                cv = color[v]
                 if cv == _GRAY:
                     cycles.append(_reconstruct_cycle(parent, u, v))
                 elif cv == _WHITE:

@@ -55,4 +55,5 @@ class TestGradleDependencyAnalyzer:
 
         report = analyzer.generate_report()
         assert isinstance(report, str)
-        assert len(report) > 0
+        assert "app" in report
+        assert "core" in report
