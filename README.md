@@ -17,18 +17,30 @@ Herramientas para **analizar, visualizar y medir la salud** de las dependencias 
 ## ⚡ Quick start
 
 ```bash
-git clone https://github.com/pfranccino/android-gradle-analyzer.git
-cd android-gradle-analyzer
+# Recomendado · instalación global con pipx
+pipx install git+https://github.com/pfranccino/android-gradle-analyzer.git
 
 # 1 · Dependencias internas de un módulo
-python3 gradle_analyzer.py /ruta/a/tu/proyecto/payments
+gradle-analyzer /ruta/a/tu/proyecto/payments
 
 # 2 · Quién llama a un módulo desde fuera
-python3 external_callers.py /ruta/a/tu/proyecto payments
+gradle-externals /ruta/a/tu/proyecto payments
 
 # 3 · Score de sanidad (Ca/Ce/I, ciclos, anti-patrones)
-python3 gradle_sanity.py /ruta/a/tu/proyecto/payments
+gradle-sanity /ruta/a/tu/proyecto/payments
 ```
+
+<details>
+<summary><b>Alternativa · clonar el repo</b> (para desarrollo o contribuir)</summary>
+
+```bash
+git clone https://github.com/pfranccino/android-gradle-analyzer.git
+cd android-gradle-analyzer
+pip install -r requirements.txt
+python3 gradle_analyzer.py /ruta/a/tu/proyecto/payments
+```
+
+</details>
 
 ---
 
@@ -37,8 +49,7 @@ python3 gradle_sanity.py /ruta/a/tu/proyecto/payments
 Un único comando con dashboard, autodetección de módulos, navegación con teclado y export a HTML / Markdown / ZIP.
 
 ```bash
-pip install -r requirements.txt
-python3 menu.py
+gradle-analyzer-menu
 ```
 
 <div align="center">
@@ -47,8 +58,8 @@ python3 menu.py
 
 **Modo no-interactivo (CI/scripts):**
 ```bash
-python3 menu.py --quick sanity /ruta/proyecto
-python3 menu.py --version
+gradle-analyzer-menu --quick sanity /ruta/proyecto
+gradle-analyzer-menu --version
 ```
 
 ---
@@ -100,7 +111,7 @@ Métricas Ca/Ce/I, detección de ciclos, violaciones SDP y score 0–100 con exp
 <summary><b>1. Analizar dependencias internas</b></summary>
 
 ```bash
-python3 gradle_analyzer.py <ruta_al_modulo>
+gradle-analyzer <ruta_al_modulo>
 ```
 
 | Flag | Descripción | Default |
@@ -114,13 +125,13 @@ python3 gradle_analyzer.py <ruta_al_modulo>
 
 ```bash
 # Solo Mermaid
-python3 gradle_analyzer.py /ruta/proyecto/payments --format mermaid
+gradle-analyzer /ruta/proyecto/payments --format mermaid
 
 # Excluir módulos de test
-python3 gradle_analyzer.py /ruta/proyecto/payments --exclude test-utils --exclude mocks
+gradle-analyzer /ruta/proyecto/payments --exclude test-utils --exclude mocks
 
 # Output personalizado
-python3 gradle_analyzer.py /ruta/proyecto/payments --output-dir docs/diagrams
+gradle-analyzer /ruta/proyecto/payments --output-dir docs/diagrams
 ```
 
 **Genera:**
@@ -134,7 +145,7 @@ python3 gradle_analyzer.py /ruta/proyecto/payments --output-dir docs/diagrams
 <summary><b>2. Analizar llamadas externas</b></summary>
 
 ```bash
-python3 external_callers.py <ruta_proyecto> <nombre_modulo>
+gradle-externals <ruta_proyecto> <nombre_modulo>
 ```
 
 | Flag | Descripción | Default |
@@ -154,7 +165,7 @@ python3 external_callers.py <ruta_proyecto> <nombre_modulo>
 <summary><b>3. Analizar sanidad arquitectónica</b></summary>
 
 ```bash
-python3 gradle_sanity.py <ruta_al_modulo>
+gradle-sanity <ruta_al_modulo>
 ```
 
 | Flag | Descripción | Default |
@@ -286,10 +297,11 @@ android-gradle-analyzer/
 ├── LICENSE
 ├── CONTRIBUTING.md
 ├── EXAMPLES.md
+├── pyproject.toml               ← instalación via pipx
+├── requirements.txt             ← uso directo (git clone)
 ├── setup.sh
-├── requirements.txt
-├── menu.py                      ← menú interactivo
-├── menu/                        ← módulos del menú
+├── menu.py                      ← wrapper: python3 menu.py
+├── menu/                        ← paquete del menú interactivo
 │   ├── actions.py
 │   ├── branding.py
 │   ├── exporter.py
@@ -356,7 +368,7 @@ Subí los valores de espaciado (ver sección anterior).
 **No detecta algunas dependencias**
 El formato del gradle puede ser distinto al estándar. Revisá los patrones en `analyzer_utils.py` (constante `DEPENDENCY_SCOPES`).
 
-**El menú interactivo no arranca**
+**El menú no arranca tras clonar**
 Instalá las dependencias: `pip install -r requirements.txt`
 
 </details>
