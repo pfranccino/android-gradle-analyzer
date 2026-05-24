@@ -36,8 +36,12 @@ env/
 # Output directories
 diagrams/
 external-calls/
+sanity/
 *.png
 *.pdf
+
+# Claude Code internal files
+.claude/
 
 # SVG generados (excluir diagrams de PlantUML pero no los assets del repo)
 *.svg
