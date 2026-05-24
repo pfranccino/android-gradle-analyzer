@@ -166,19 +166,19 @@ def load_config(config_path=None) -> dict:
 
     Busca en orden:
     1. config_path explícito (via --config)
-    2. analyzer_config.json en el directorio de trabajo actual
-    3. analyzer_config.json junto al script
-    4. Defaults internos (genéricos para cualquier proyecto Android)
+    2. analyzer_config.json en el directorio de trabajo actual (CWD)
+    3. Defaults internos (genéricos para cualquier proyecto Android)
+
+    No se auto-carga desde el directorio del script para que el archivo
+    de ejemplo versionado (analyzer_config.example.json) sea realmente
+    opt-in: el usuario debe copiarlo y renombrarlo para activarlo.
     """
     candidates = []
 
     if config_path:
         candidates.append(Path(config_path))
 
-    candidates.extend([
-        Path.cwd() / "analyzer_config.json",
-        Path(__file__).parent / "analyzer_config.json",
-    ])
+    candidates.append(Path.cwd() / "analyzer_config.json")
 
     for candidate in candidates:
         if candidate.exists():

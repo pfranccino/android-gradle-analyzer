@@ -1,7 +1,7 @@
 {
-  "_comentario": "Configuración opcional para Android Gradle Dependency Analyzer.",
-  "_comentario2": "Todos los campos son opcionales. Los ausentes usan defaults genéricos.",
-  "_comentario3": "Para activar, copia o renombra este archivo a 'analyzer_config.json' en tu directorio de trabajo.",
+  "_comentario": "Archivo de EJEMPLO. Para activarlo: cp analyzer_config.example.json analyzer_config.json",
+  "_comentario2": "La herramienta busca 'analyzer_config.json' en el directorio donde la ejecutas (CWD).",
+  "_comentario3": "Todos los campos son opcionales. Los ausentes usan defaults genéricos internos.",
 
   "icons": {
     "common": "🔧",

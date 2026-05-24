@@ -317,7 +317,7 @@ class GradleDependencyAnalyzer:
     def save_all(self, output_dir="diagrams", fmt="all"):
         """Guarda los archivos generados según el formato solicitado"""
         output_path = Path(output_dir)
-        output_path.mkdir(exist_ok=True)
+        output_path.mkdir(parents=True, exist_ok=True)
 
         if fmt in ('plantuml', 'all'):
             plantuml_file = output_path / "gradle-dependencies.puml"

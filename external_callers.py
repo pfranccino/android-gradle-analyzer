@@ -189,6 +189,14 @@ class ExternalCallersAnalyzer:
         lines.append(f'  classDef internal fill:{colors.get("hub", "#E8F5E9")},stroke:#2E7D32')
         lines.append("  classDef external fill:#FFE0B2,stroke:#E65100")
 
+        # Aplicar estilos a los nodos
+        internal_ids = [m.replace(':', '_').replace('-', '_') for m in sorted(called_modules)]
+        external_ids = [c.replace(':', '_').replace('-', '_') for c in sorted(self.external_callers.keys())]
+        if internal_ids:
+            lines.append(f"  class {','.join(internal_ids)} internal")
+        if external_ids:
+            lines.append(f"  class {','.join(external_ids)} external")
+
         return "\n".join(lines)
 
     def generate_report(self):
@@ -240,7 +248,7 @@ class ExternalCallersAnalyzer:
     def save_all(self, output_dir="external-calls", fmt="all"):
         """Guarda los archivos generados según el formato solicitado"""
         output_path = Path(output_dir)
-        output_path.mkdir(exist_ok=True)
+        output_path.mkdir(parents=True, exist_ok=True)
 
         if fmt in ('plantuml', 'all'):
             plantuml_file = output_path / f"{self.target_module}-external-calls.puml"

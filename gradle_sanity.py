@@ -401,7 +401,7 @@ class GradleSanityAnalyzer:
 
     def save_report(self, output_dir="sanity"):
         output_path = Path(output_dir)
-        output_path.mkdir(exist_ok=True)
+        output_path.mkdir(parents=True, exist_ok=True)
         report_file = output_path / "sanity-report.txt"
         report_file.write_text(self.generate_report(), encoding='utf-8')
         print(f"✓ Reporte: {report_file}")

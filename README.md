@@ -75,7 +75,7 @@ python3 gradle_analyzer.py /ruta/a/tu/proyecto/payments --format mermaid
 # Excluir módulos de test
 python3 gradle_analyzer.py /ruta/a/tu/proyecto/payments --exclude test-utils --exclude mocks
 
-# Usar directorio de salida personalizado
+# Usar directorio de salida personalizado (se crean los padres automáticamente)
 python3 gradle_analyzer.py /ruta/a/tu/proyecto/payments --output-dir docs/diagrams
 ```
 
@@ -198,9 +198,13 @@ Muestra qué módulos externos (app, otros features) usan tu feature:
 
 ## ⚙️ Configuración Personalizada
 
-Puedes personalizar colores, íconos y estilos creando un archivo `analyzer_config.json` en tu directorio de trabajo. El archivo es **completamente opcional** — sin él, la herramienta usa defaults genéricos para cualquier proyecto Android.
+Puedes personalizar colores, íconos y estilos creando un archivo `analyzer_config.json` en el directorio desde donde ejecutas la herramienta. El archivo es **completamente opcional** — sin él, la herramienta usa defaults genéricos para cualquier proyecto Android.
 
-El repositorio incluye `analyzer_config.json` como referencia documentada con todos los campos disponibles.
+El repositorio incluye `analyzer_config.example.json` con todos los campos disponibles documentados. Para activarlo:
+
+```bash
+cp analyzer_config.example.json analyzer_config.json
+```
 
 **Ejemplo de configuración parcial:**
 
@@ -254,7 +258,7 @@ android-gradle-analyzer/
 ├── EXAMPLES.md                ← Ejemplos de uso
 ├── setup.sh                   ← Script de configuración
 ├── analyzer_utils.py          ← Utilidades compartidas
-├── analyzer_config.json       ← Configuración de ejemplo (opcional)
+├── analyzer_config.example.json ← Configuración de ejemplo (cp → analyzer_config.json para activar)
 ├── gradle_analyzer.py         ← Script principal 1: dependencias internas
 └── external_callers.py        ← Script principal 2: llamadas externas
 ```
