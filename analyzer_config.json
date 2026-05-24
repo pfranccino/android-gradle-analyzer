@@ -1,0 +1,50 @@
+{
+  "_comentario": "Configuración opcional para Android Gradle Dependency Analyzer.",
+  "_comentario2": "Todos los campos son opcionales. Los ausentes usan defaults genéricos.",
+  "_comentario3": "Para activar, copia o renombra este archivo a 'analyzer_config.json' en tu directorio de trabajo.",
+
+  "icons": {
+    "common": "🔧",
+    "shared": "🔧",
+    "core": "🔧",
+    "gateway": "🌐",
+    "api": "🌐",
+    "network": "📡",
+    "remote": "🌐",
+    "home": "🏠",
+    "main": "🏠",
+    "ui": "🎨",
+    "presentation": "🎨",
+    "screen": "🎨",
+    "domain": "🧩",
+    "usecase": "🧩",
+    "data": "💾",
+    "repository": "💾",
+    "database": "🗄️",
+    "local": "🗄️",
+    "test": "🧪"
+  },
+
+  "styles": {},
+
+  "colors": {
+    "common":  "#FFF9C4",
+    "gateway": "#E1F5FE",
+    "hub":     "#E8F5E9",
+    "cycle":   "#FFCDD2"
+  },
+
+  "scope_weights": {
+    "api":                      "high",
+    "implementation":           "normal",
+    "compileOnly":              "build",
+    "kapt":                     "build",
+    "annotationProcessor":      "build",
+    "testImplementation":       "test",
+    "androidTestImplementation":"test",
+    "testRuntimeOnly":          "test",
+    "debugImplementation":      "debug",
+    "releaseImplementation":    "release",
+    "runtimeOnly":              "runtime"
+  }
+}
