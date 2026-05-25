@@ -244,6 +244,32 @@ def _deep_merge(base: dict, override: dict) -> dict:
     return result
 
 
+def load_project_config(project_root) -> dict:
+    """
+    Carga el archivo analyzer.yml desde la raíz del proyecto analizado.
+
+    Requiere pyyaml (opcional). Si no está instalado o el archivo no existe,
+    devuelve un dict vacío sin emitir errores fatales.
+
+    Args:
+        project_root: ruta a la raíz del proyecto Android analizado
+
+    Returns:
+        dict con las secciones del yml (sanity, impact, analyzer, …) o {} si no aplica
+    """
+    config_file = Path(project_root) / "analyzer.yml"
+    if not config_file.exists():
+        return {}
+    try:
+        import yaml
+        return yaml.safe_load(config_file.read_text(encoding='utf-8')) or {}
+    except ImportError:
+        return {}
+    except Exception as e:
+        print(f"  ⚠️  Error leyendo analyzer.yml: {e}")
+        return {}
+
+
 def load_config(config_path=None) -> dict:
     """
     Carga configuración desde un archivo JSON.

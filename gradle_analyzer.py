@@ -10,6 +10,7 @@ from analyzer_utils import (
     parse_gradle_file_scoped,
     parse_settings_modules,
     load_config,
+    load_project_config,
     get_icon,
     get_style,
     detect_cycles,
@@ -483,8 +484,8 @@ def main():
     )
     parser.add_argument('path')
     parser.add_argument('--format', choices=['plantuml', 'mermaid', 'dot', 'ascii', 'all'],
-                        default='all', dest='fmt', metavar='FORMAT')
-    parser.add_argument('--output-dir', default='diagrams', dest='output_dir', metavar='DIR')
+                        default=None, dest='fmt', metavar='FORMAT')
+    parser.add_argument('--output-dir', default=None, dest='output_dir', metavar='DIR')
     parser.add_argument('--exclude', action='append', default=[], metavar='MODULE')
     parser.add_argument('--focus',   default=None, metavar='MODULE[,MODULE]')
     parser.add_argument('--config',  default=None, metavar='PATH')
@@ -492,6 +493,12 @@ def main():
     parser.add_argument('--json',    action='store_true')
 
     args = parser.parse_args()
+
+    proj_cfg = load_project_config(args.path).get('analyzer', {})
+    if args.output_dir is None:
+        args.output_dir = proj_cfg.get('output_dir', 'diagrams')
+    if args.fmt is None:
+        args.fmt = proj_cfg.get('format', 'all')
 
     if not args.quiet:
         print("🚀 Analizador de Dependencias via Gradle")

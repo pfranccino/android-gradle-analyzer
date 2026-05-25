@@ -1,0 +1,12 @@
+sanity:
+  fail_on_cycle: true
+  fail_on_score_below: 70
+  output_dir: reports/sanity
+
+impact:
+  default_module: app
+  output_dir: reports/impact
+
+analyzer:
+  output_dir: reports/diagrams
+  format: mermaid

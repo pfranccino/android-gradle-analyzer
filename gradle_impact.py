@@ -9,6 +9,7 @@ from analyzer_utils import (
     parse_gradle_file_scoped,
     parse_settings_modules,
     load_config,
+    load_project_config,
     get_icon,
     normalize_module_name,
     find_gradle_file,
@@ -226,15 +227,23 @@ def main():
         description="Calcula el impacto transitivo de cambios en un módulo Android"
     )
     parser.add_argument("project_root")
-    parser.add_argument("target_module")
+    parser.add_argument("target_module", nargs="?", default=None)
     parser.add_argument("--format", choices=["plantuml", "mermaid", "all"], default="all",
                         dest="fmt", metavar="FORMAT")
-    parser.add_argument("--output-dir", default="impact", dest="output_dir", metavar="DIR")
+    parser.add_argument("--output-dir", default=None, dest="output_dir", metavar="DIR")
     parser.add_argument("--config",     default=None, metavar="PATH")
     parser.add_argument("--quiet",      action="store_true")
     parser.add_argument("--json",       action="store_true")
 
     args = parser.parse_args()
+
+    proj_cfg = load_project_config(args.project_root).get('impact', {})
+    if args.target_module is None:
+        args.target_module = proj_cfg.get('default_module')
+    if args.output_dir is None:
+        args.output_dir = proj_cfg.get('output_dir', 'impact')
+    if args.target_module is None:
+        parser.error("Se requiere target_module como argumento o impact.default_module en analyzer.yml")
 
     if not args.quiet:
         print("💥 Analizador de Impacto de Cambios")

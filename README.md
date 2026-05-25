@@ -375,6 +375,48 @@ Solo incluí los campos que querés cambiar — el resto usa defaults.
 
 ---
 
+## ⚙️ Configuración por proyecto (`analyzer.yml`)
+
+Si creás un archivo `analyzer.yml` en la **raíz del proyecto Android analizado**, las herramientas lo leerán automáticamente y usarán sus valores como defaults. Los flags de CLI siempre tienen prioridad sobre el yml.
+
+```yaml
+sanity:
+  fail_on_cycle: true
+  fail_on_score_below: 70
+  output_dir: reports/sanity
+
+impact:
+  default_module: app
+  output_dir: reports/impact
+
+analyzer:
+  output_dir: reports/diagrams
+  format: mermaid
+
+externals:
+  output_dir: reports/external-calls
+```
+
+**Campos por sección:**
+
+| Sección | Campo | CLI equivalente |
+|---|---|---|
+| `sanity` | `fail_on_cycle` | `--fail-on-cycle` |
+| `sanity` | `fail_on_score_below` | `--fail-on-score-below N` |
+| `sanity` | `output_dir` | `--output-dir` |
+| `impact` | `default_module` | segundo argumento posicional |
+| `impact` | `output_dir` | `--output-dir` |
+| `analyzer` | `output_dir` | `--output-dir` |
+| `analyzer` | `format` | `--format` |
+| `externals` | `output_dir` | `--output-dir` |
+
+**Reglas:**
+- El yml se busca en la ruta que pasás como primer argumento, no en el CWD.
+- Los flags de CLI **siempre** ganan sobre el yml.
+- Requiere `pyyaml` (instalación opcional: `pip install android-gradle-analyzer[yaml]`). Si no está instalado, el yml se ignora sin error.
+
+---
+
 ## 🚦 Integración CI/CD
 
 `gradle-sanity` tiene flags para fallar la build si se detectan problemas:

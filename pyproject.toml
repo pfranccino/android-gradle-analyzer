@@ -20,8 +20,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-pdf = ["weasyprint>=60"]
-tui = ["textual>=0.50"]
+pdf  = ["weasyprint>=60"]
+tui  = ["textual>=0.50"]
+yaml = ["pyyaml>=6.0"]
 
 [project.scripts]
 gradle-analyzer      = "gradle_analyzer:main"

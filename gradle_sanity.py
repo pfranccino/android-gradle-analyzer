@@ -22,7 +22,7 @@ from pathlib import Path
 from collections import defaultdict
 
 from gradle_analyzer import GradleDependencyAnalyzer
-from analyzer_utils import load_config
+from analyzer_utils import load_config, load_project_config
 
 
 # Regex para detectar versiones hardcodeadas del tipo "group:artifact:1.2.3"
@@ -465,14 +465,22 @@ def main():
         description='Mide la sanidad arquitectónica de las dependencias Gradle de un módulo Android'
     )
     parser.add_argument('path')
-    parser.add_argument('--output-dir', default='sanity', dest='output_dir', metavar='DIR')
+    parser.add_argument('--output-dir', default=None, dest='output_dir', metavar='DIR')
     parser.add_argument('--config',     default=None, metavar='PATH')
     parser.add_argument('--quiet',      action='store_true')
     parser.add_argument('--json',       action='store_true')
-    parser.add_argument('--fail-on-cycle',        action='store_true', dest='fail_on_cycle')
-    parser.add_argument('--fail-on-score-below',  type=int, default=None, dest='fail_below', metavar='N')
+    parser.add_argument('--fail-on-cycle',       action='store_const', const=True, default=None, dest='fail_on_cycle')
+    parser.add_argument('--fail-on-score-below', type=int, default=None, dest='fail_below', metavar='N')
 
     args = parser.parse_args()
+
+    proj_cfg = load_project_config(args.path).get('sanity', {})
+    if args.output_dir is None:
+        args.output_dir = proj_cfg.get('output_dir', 'sanity')
+    if args.fail_on_cycle is None:
+        args.fail_on_cycle = bool(proj_cfg.get('fail_on_cycle', False))
+    if args.fail_below is None:
+        args.fail_below = proj_cfg.get('fail_on_score_below')
 
     if not args.quiet:
         print("🏥 Analizador de Sanidad de Dependencias Gradle")

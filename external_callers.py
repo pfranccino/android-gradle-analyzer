@@ -10,6 +10,7 @@ from analyzer_utils import (
     parse_gradle_file_scoped,
     parse_settings_modules,
     load_config,
+    load_project_config,
     get_icon,
     normalize_module_name,
     is_submodule_of,
@@ -269,12 +270,16 @@ def main():
     parser.add_argument('target_module')
     parser.add_argument('--format', choices=['plantuml', 'mermaid', 'all'], default='all',
                         dest='fmt', metavar='FORMAT')
-    parser.add_argument('--output-dir', default='external-calls', dest='output_dir', metavar='DIR')
+    parser.add_argument('--output-dir', default=None, dest='output_dir', metavar='DIR')
     parser.add_argument('--config', default=None, metavar='PATH')
     parser.add_argument('--quiet', action='store_true')
     parser.add_argument('--json',  action='store_true')
 
     args = parser.parse_args()
+
+    proj_cfg = load_project_config(args.project_root).get('externals', {})
+    if args.output_dir is None:
+        args.output_dir = proj_cfg.get('output_dir', 'external-calls')
 
     if not args.quiet:
         print("🚀 Analizador de Llamadas Externas")
