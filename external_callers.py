@@ -243,23 +243,21 @@ class ExternalCallersAnalyzer:
     def save_all(self, output_dir="external-calls", fmt="all"):
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
+        slug = self.target_module.replace(":", "-")
 
         if fmt in ('plantuml', 'all'):
-            plantuml_file = output_path / f"{self.target_module}-external-calls.puml"
-            with open(plantuml_file, 'w', encoding='utf-8') as f:
-                f.write(self.generate_plantuml())
-            self._vprint(f"✓ PlantUML: {plantuml_file}")
+            p = output_path / f"{slug}-external-calls.puml"
+            p.write_text(self.generate_plantuml(), encoding='utf-8')
+            self._vprint(f"✓ PlantUML: {p}")
 
         if fmt in ('mermaid', 'all'):
-            mermaid_file = output_path / f"{self.target_module}-external-calls.mmd"
-            with open(mermaid_file, 'w', encoding='utf-8') as f:
-                f.write(self.generate_mermaid())
-            self._vprint(f"✓ Mermaid: {mermaid_file}")
+            p = output_path / f"{slug}-external-calls.mmd"
+            p.write_text(self.generate_mermaid(), encoding='utf-8')
+            self._vprint(f"✓ Mermaid: {p}")
 
-        report_file = output_path / f"{self.target_module}-external-report.txt"
-        with open(report_file, 'w', encoding='utf-8') as f:
-            f.write(self.generate_report())
-        self._vprint(f"✓ Reporte: {report_file}")
+        p = output_path / f"{slug}-external-report.txt"
+        p.write_text(self.generate_report(), encoding='utf-8')
+        self._vprint(f"✓ Reporte: {p}")
 
 
 def main():
