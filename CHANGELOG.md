@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.0.8] - 2026-05-25
+
+### Fixed
+- Mermaid: edge label `use` renombrado a `uses` — `use` es keyword reservado en Mermaid v11+ y causaba error de parsing
+- Mermaid: `base_path` resuelto con `.resolve()` para que el ID del subgraph no quede vacío al invocar el analyzer con ruta relativa (`.`)
+- Consola: `VERSION` en `menu/branding.py` desincronizado con `pyproject.toml` — ahora ambos se actualizan juntos en el bump
+
 ## [1.0.7] - 2026-05-25
 
 ### Fixed
