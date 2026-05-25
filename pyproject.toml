@@ -29,6 +29,8 @@ gradle-externals     = "external_callers:main"
 gradle-sanity        = "gradle_sanity:main"
 gradle-analyzer-menu = "menu:main"
 gradle-impact        = "gradle_impact:main"
+gradle-dot           = "gradle_analyzer:main_dot"
+gradle-ascii         = "gradle_analyzer:main_ascii"
 
 [project.urls]
 Homepage = "https://github.com/pfranccino/android-gradle-analyzer"

@@ -4,6 +4,7 @@ import json
 import argparse
 from pathlib import Path
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 
 from analyzer_utils import (
     parse_gradle_file_scoped,
@@ -12,6 +13,8 @@ from analyzer_utils import (
     get_icon,
     get_style,
     detect_cycles,
+    find_gradle_file,
+    normalize_module_name,
 )
 
 _COMPILE_SCOPES = {'api', 'implementation', 'compileOnly'}
@@ -20,6 +23,14 @@ _TEST_SCOPES    = {
     'testImplementation', 'androidTestImplementation',
     'debugImplementation', 'releaseImplementation',
     'runtimeOnly', 'testRuntimeOnly',
+}
+
+_DOT_COLORS = {
+    'common':  '#FFF9C4',
+    'gateway': '#E1F5FE',
+    'hub':     '#E8F5E9',
+    'cycle':   '#FFCDD2',
+    'default': '#F5F5F5',
 }
 
 
@@ -73,22 +84,26 @@ class GradleDependencyAnalyzer:
     def analyze_gradle_dependencies(self):
         self._vprint("🔍 Analizando archivos Gradle...")
 
-        for module in self.modules:
-            module_path = self.base_path / module.replace(':', '/')
-            gradle_file = module_path / "build.gradle.kts"
-            if not gradle_file.exists():
-                gradle_file = module_path / "build.gradle"
+        modules   = self.modules
+        base_path = self.base_path
 
-            if gradle_file.exists():
-                scoped = parse_gradle_file_scoped(gradle_file, self.modules, module)
-                if scoped:
+        def _parse_one(module):
+            module_path = base_path / module.replace(':', '/')
+            gradle_file = find_gradle_file(module_path)
+            if gradle_file is None:
+                return module, None
+            return module, parse_gradle_file_scoped(gradle_file, modules, module)
+
+        with ThreadPoolExecutor() as executor:
+            for module, scoped in executor.map(_parse_one, modules):
+                if scoped is None:
+                    self._vprint(f"  ⚠️  No se encontró gradle para: {module}")
+                elif scoped:
                     self.dependencies[module] = scoped
                     total = sum(len(v) for v in scoped.values())
                     self._vprint(f"  ✓ {module}: {total} dependencia(s)")
                 else:
                     self._vprint(f"  ○ {module}: sin dependencias internas")
-            else:
-                self._vprint(f"  ⚠️  No se encontró gradle para: {module}")
 
         total_deps = sum(
             len(mods)
@@ -101,7 +116,43 @@ class GradleDependencyAnalyzer:
     def detect_dependency_cycles(self):
         return detect_cycles(self.dependencies)
 
-    def generate_plantuml(self):
+    def _focused_modules(self, focus_list):
+        visited = set()
+        queue   = [m for m in focus_list if m in self.modules]
+        while queue:
+            m = queue.pop()
+            if m in visited:
+                continue
+            visited.add(m)
+            for scope_deps in self.dependencies.get(m, {}).values():
+                for dep in scope_deps:
+                    if dep not in visited:
+                        queue.append(dep)
+        return [m for m in self.modules if m in visited]
+
+    def _compile_deps(self, module):
+        scoped = self.dependencies.get(module, {})
+        result = set()
+        for s in _COMPILE_SCOPES:
+            result |= scoped.get(s, set())
+        return result
+
+    def _build_deps(self, module):
+        scoped = self.dependencies.get(module, {})
+        result = set()
+        for s in _BUILD_SCOPES:
+            result |= scoped.get(s, set())
+        return result
+
+    def _test_deps(self, module):
+        scoped = self.dependencies.get(module, {})
+        result = set()
+        for s in _TEST_SCOPES:
+            result |= scoped.get(s, set())
+        return result
+
+    def generate_plantuml(self, focus=None):
+        modules       = self._focused_modules(focus) if focus else self.modules
         package_name  = self.base_path.name
         cycles        = self.detect_dependency_cycles()
         cycle_modules = {m for cycle in cycles for m in cycle}
@@ -127,43 +178,31 @@ class GradleDependencyAnalyzer:
             "",
         ]
 
-        for module in sorted(self.modules):
+        module_set = set(modules)
+        for module in sorted(modules):
             module_id = module.replace('-', '_').replace(':', '_')
             style     = ' <<cycle>>' if module in cycle_modules else get_style(module, self.config)
             lines.append(f'  class "{module}" as {module_id}{style}')
 
         lines.append("")
-        lines.append("  ' Dependencias detectadas desde Gradle")
+        for from_module in sorted(modules):
+            from_id      = from_module.replace('-', '_').replace(':', '_')
+            compile_deps = self._compile_deps(from_module) & module_set
+            build_deps   = self._build_deps(from_module) & module_set
+            test_deps    = self._test_deps(from_module) & module_set
 
-        for from_module in sorted(self.dependencies.keys()):
-            from_id = from_module.replace('-', '_').replace(':', '_')
-            scoped  = self.dependencies[from_module]
-
-            compile_deps = set()
-            for s in _COMPILE_SCOPES:
-                compile_deps |= scoped.get(s, set())
             for to_module in sorted(compile_deps):
-                to_id = to_module.replace('-', '_').replace(':', '_')
-                lines.append(f"  {from_id} --> {to_id} : use")
-
-            build_deps = set()
-            for s in _BUILD_SCOPES:
-                build_deps |= scoped.get(s, set())
+                lines.append(f"  {from_id} --> {to_module.replace('-','_').replace(':','_')} : use")
             for to_module in sorted(build_deps - compile_deps):
-                to_id = to_module.replace('-', '_').replace(':', '_')
-                lines.append(f"  {from_id} ..> {to_id} : build")
-
-            test_deps = set()
-            for s in _TEST_SCOPES:
-                test_deps |= scoped.get(s, set())
+                lines.append(f"  {from_id} ..> {to_module.replace('-','_').replace(':','_')} : build")
             for to_module in sorted(test_deps - compile_deps - build_deps):
-                to_id = to_module.replace('-', '_').replace(':', '_')
-                lines.append(f"  {from_id} ..> {to_id} : test")
+                lines.append(f"  {from_id} ..> {to_module.replace('-','_').replace(':','_')} : test")
 
         lines.extend(["", "}", "", "@enduml"])
         return "\n".join(lines)
 
-    def generate_mermaid(self):
+    def generate_mermaid(self, focus=None):
+        modules       = self._focused_modules(focus) if focus else self.modules
         package_name  = self.base_path.name
         pkg_id        = package_name.replace('-', '_')
         cycles        = self.detect_dependency_cycles()
@@ -176,38 +215,25 @@ class GradleDependencyAnalyzer:
             "",
         ]
 
-        for module in sorted(self.modules):
+        module_set = set(modules)
+        for module in sorted(modules):
             module_id = module.replace('-', '_').replace(':', '_')
             icon      = get_icon(module, self.config)
             lines.append(f'    {module_id}["{icon} {module}"]')
 
         lines.append("")
-        lines.append("    %% Dependencias desde Gradle")
+        for from_module in sorted(modules):
+            from_id      = from_module.replace('-', '_').replace(':', '_')
+            compile_deps = self._compile_deps(from_module) & module_set
+            build_deps   = self._build_deps(from_module) & module_set
+            test_deps    = self._test_deps(from_module) & module_set
 
-        for from_module in sorted(self.dependencies.keys()):
-            from_id = from_module.replace('-', '_').replace(':', '_')
-            scoped  = self.dependencies[from_module]
-
-            compile_deps = set()
-            for s in _COMPILE_SCOPES:
-                compile_deps |= scoped.get(s, set())
             for to_module in sorted(compile_deps):
-                to_id = to_module.replace('-', '_').replace(':', '_')
-                lines.append(f"    {from_id} -->|use| {to_id}")
-
-            build_deps = set()
-            for s in _BUILD_SCOPES:
-                build_deps |= scoped.get(s, set())
+                lines.append(f"    {from_id} -->|use| {to_module.replace('-','_').replace(':','_')}")
             for to_module in sorted(build_deps - compile_deps):
-                to_id = to_module.replace('-', '_').replace(':', '_')
-                lines.append(f"    {from_id} -.->|build| {to_id}")
-
-            test_deps = set()
-            for s in _TEST_SCOPES:
-                test_deps |= scoped.get(s, set())
+                lines.append(f"    {from_id} -.->|build| {to_module.replace('-','_').replace(':','_')}")
             for to_module in sorted(test_deps - compile_deps - build_deps):
-                to_id = to_module.replace('-', '_').replace(':', '_')
-                lines.append(f"    {from_id} -.->|test| {to_id}")
+                lines.append(f"    {from_id} -.->|test| {to_module.replace('-','_').replace(':','_')}")
 
         lines.append("  end")
         lines.append("")
@@ -221,10 +247,10 @@ class GradleDependencyAnalyzer:
         def _ids(mods):
             return [m.replace('-', '_').replace(':', '_') for m in mods]
 
-        commons   = _ids(m for m in self.modules if any(k in m.lower() for k in ('common', 'core', 'shared')))
-        gateways  = _ids(m for m in self.modules if any(k in m.lower() for k in ('gateway', 'network', 'remote')) or m.endswith(':api'))
-        hubs      = _ids(m for m in self.modules if any(k in m.lower() for k in ('home', 'main', 'hub')))
-        cycle_ids = _ids(m for m in cycle_modules if m in self.modules)
+        commons   = _ids(m for m in modules if any(k in m.lower() for k in ('common', 'core', 'shared')))
+        gateways  = _ids(m for m in modules if any(k in m.lower() for k in ('gateway', 'network', 'remote')) or m.endswith(':api'))
+        hubs      = _ids(m for m in modules if any(k in m.lower() for k in ('home', 'main', 'hub')))
+        cycle_ids = _ids(m for m in cycle_modules if m in module_set)
 
         if commons:
             lines.append(f"  class {','.join(commons)} commonStyle")
@@ -234,6 +260,98 @@ class GradleDependencyAnalyzer:
             lines.append(f"  class {','.join(hubs)} hubStyle")
         if cycle_ids:
             lines.append(f"  class {','.join(cycle_ids)} cycleStyle")
+
+        return "\n".join(lines)
+
+    def generate_dot(self, focus=None):
+        modules       = self._focused_modules(focus) if focus else self.modules
+        package_name  = self.base_path.name
+        cycles        = self.detect_dependency_cycles()
+        cycle_modules = {m for cycle in cycles for m in cycle}
+        colors        = self.config.get("colors", _DOT_COLORS)
+        module_set    = set(modules)
+
+        def _color(module):
+            if module in cycle_modules:
+                return colors.get("cycle", _DOT_COLORS["cycle"])
+            ml = module.lower()
+            if any(k in ml for k in ('common', 'core', 'shared')):
+                return colors.get("common", _DOT_COLORS["common"])
+            if any(k in ml for k in ('gateway', 'network', 'remote', 'api')):
+                return colors.get("gateway", _DOT_COLORS["gateway"])
+            if any(k in ml for k in ('home', 'main', 'hub')):
+                return colors.get("hub", _DOT_COLORS["hub"])
+            return _DOT_COLORS["default"]
+
+        lines = [
+            f'digraph "{package_name}" {{',
+            '  rankdir=LR',
+            '  bgcolor=white',
+            '  node [shape=box fontname="Helvetica" style=filled fontsize=12]',
+            '  edge [fontname="Helvetica" fontsize=10]',
+            '',
+        ]
+
+        for module in sorted(modules):
+            node_id = module.replace(':', '_').replace('-', '_')
+            color   = _color(module)
+            lines.append(f'  {node_id} [label="{module}" fillcolor="{color}"]')
+
+        lines.append('')
+
+        for from_module in sorted(modules):
+            from_id      = from_module.replace(':', '_').replace('-', '_')
+            compile_deps = self._compile_deps(from_module) & module_set
+            build_deps   = self._build_deps(from_module) & module_set
+            test_deps    = self._test_deps(from_module) & module_set
+
+            for to in sorted(compile_deps):
+                to_id = to.replace(':', '_').replace('-', '_')
+                lines.append(f'  {from_id} -> {to_id} [label="impl" color="#555555"]')
+            for to in sorted(build_deps - compile_deps):
+                to_id = to.replace(':', '_').replace('-', '_')
+                lines.append(f'  {from_id} -> {to_id} [label="build" style=dashed color="#888888"]')
+            for to in sorted(test_deps - compile_deps - build_deps):
+                to_id = to.replace(':', '_').replace('-', '_')
+                lines.append(f'  {from_id} -> {to_id} [label="test" style=dashed color="#AAAAAA"]')
+
+        lines.append('}')
+        return "\n".join(lines)
+
+    def generate_ascii(self, focus=None):
+        modules    = self._focused_modules(focus) if focus else self.modules
+        module_set = set(modules)
+        name       = self.base_path.name
+        width      = 70
+
+        lines = [
+            "━" * width,
+            f"DEPENDENCIAS — {name.upper()}",
+            "━" * width,
+            "",
+        ]
+
+        for module in sorted(modules):
+            scoped = self.dependencies.get(module, {})
+            all_deps = [
+                (dep, scope)
+                for scope, deps in sorted(scoped.items())
+                for dep in sorted(deps)
+                if dep in module_set
+            ]
+
+            icon = get_icon(module, self.config)
+            lines.append(f"{icon} {module}")
+
+            if not all_deps:
+                lines.append("  (sin dependencias internas)")
+            else:
+                for i, (dep, scope) in enumerate(all_deps):
+                    connector = "└──" if i == len(all_deps) - 1 else "├──"
+                    dep_icon  = get_icon(dep, self.config)
+                    lines.append(f"  {connector} {dep_icon} {dep}  [{scope}]")
+
+            lines.append("")
 
         return "\n".join(lines)
 
@@ -315,47 +433,37 @@ class GradleDependencyAnalyzer:
             "cycles": self.detect_dependency_cycles(),
         }
 
-    def save_all(self, output_dir="diagrams", fmt="all"):
+    def save_all(self, output_dir="diagrams", fmt="all", focus=None):
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
 
         if fmt in ('plantuml', 'all'):
-            plantuml_file = output_path / "gradle-dependencies.puml"
-            with open(plantuml_file, 'w', encoding='utf-8') as f:
-                f.write(self.generate_plantuml())
-            self._vprint(f"✓ PlantUML: {plantuml_file}")
+            p = output_path / "gradle-dependencies.puml"
+            p.write_text(self.generate_plantuml(focus), encoding='utf-8')
+            self._vprint(f"✓ PlantUML: {p}")
 
         if fmt in ('mermaid', 'all'):
-            mermaid_file = output_path / "gradle-dependencies.mmd"
-            with open(mermaid_file, 'w', encoding='utf-8') as f:
-                f.write(self.generate_mermaid())
-            self._vprint(f"✓ Mermaid: {mermaid_file}")
+            p = output_path / "gradle-dependencies.mmd"
+            p.write_text(self.generate_mermaid(focus), encoding='utf-8')
+            self._vprint(f"✓ Mermaid: {p}")
 
-        report_file = output_path / "gradle-report.txt"
-        with open(report_file, 'w', encoding='utf-8') as f:
-            f.write(self.generate_report())
-        self._vprint(f"✓ Reporte: {report_file}")
+        if fmt in ('dot', 'all'):
+            p = output_path / "gradle-dependencies.dot"
+            p.write_text(self.generate_dot(focus), encoding='utf-8')
+            self._vprint(f"✓ Graphviz DOT: {p}")
+
+        if fmt in ('ascii', 'all'):
+            p = output_path / "gradle-dependencies.txt"
+            p.write_text(self.generate_ascii(focus), encoding='utf-8')
+            self._vprint(f"✓ ASCII: {p}")
+
+        p = output_path / "gradle-report.txt"
+        p.write_text(self.generate_report(), encoding='utf-8')
+        self._vprint(f"✓ Reporte: {p}")
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description='Analiza dependencias internas de módulos Android'
-    )
-    parser.add_argument('path')
-    parser.add_argument('--format', choices=['plantuml', 'mermaid', 'all'], default='all',
-                        dest='fmt', metavar='FORMAT')
-    parser.add_argument('--output-dir', default='diagrams', dest='output_dir', metavar='DIR')
-    parser.add_argument('--exclude', action='append', default=[], metavar='MODULE')
-    parser.add_argument('--config', default=None, metavar='PATH')
-    parser.add_argument('--quiet', action='store_true', help='Suprime el output de progreso')
-    parser.add_argument('--json', action='store_true', help='Salida JSON a stdout')
-
-    args = parser.parse_args()
-
-    if not args.quiet:
-        print("🚀 Analizador de Dependencias via Gradle")
-        print("=" * 70)
-
+def _build_analyzer(args):
+    focus = [m.strip() for m in args.focus.split(',')] if getattr(args, 'focus', None) else None
     analyzer = GradleDependencyAnalyzer(
         base_path=args.path,
         config_path=args.config,
@@ -364,12 +472,36 @@ def main():
     )
     analyzer.scan_modules()
     analyzer.analyze_gradle_dependencies()
+    return analyzer, focus
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='Analiza dependencias internas de módulos Android'
+    )
+    parser.add_argument('path')
+    parser.add_argument('--format', choices=['plantuml', 'mermaid', 'dot', 'ascii', 'all'],
+                        default='all', dest='fmt', metavar='FORMAT')
+    parser.add_argument('--output-dir', default='diagrams', dest='output_dir', metavar='DIR')
+    parser.add_argument('--exclude', action='append', default=[], metavar='MODULE')
+    parser.add_argument('--focus',   default=None, metavar='MODULE[,MODULE]')
+    parser.add_argument('--config',  default=None, metavar='PATH')
+    parser.add_argument('--quiet',   action='store_true')
+    parser.add_argument('--json',    action='store_true')
+
+    args = parser.parse_args()
+
+    if not args.quiet:
+        print("🚀 Analizador de Dependencias via Gradle")
+        print("=" * 70)
+
+    analyzer, focus = _build_analyzer(args)
 
     if not args.quiet:
         print("\n📊 Generando archivos...")
         print("=" * 70)
 
-    analyzer.save_all(output_dir=args.output_dir, fmt=args.fmt)
+    analyzer.save_all(output_dir=args.output_dir, fmt=args.fmt, focus=focus)
 
     if args.json:
         print(json.dumps(analyzer.to_json_dict(), indent=2, ensure_ascii=False))
@@ -382,6 +514,19 @@ def main():
             print("\n💡 Para visualizar:")
             print("  • PlantUML: https://www.plantuml.com/plantuml/uml/")
             print("  • Mermaid:  https://mermaid.live/")
+            print("  • DOT:      dot -Tpng gradle-dependencies.dot -o deps.png")
+
+
+def main_dot():
+    sys.argv.insert(1, '--format')
+    sys.argv.insert(2, 'dot')
+    main()
+
+
+def main_ascii():
+    sys.argv.insert(1, '--format')
+    sys.argv.insert(2, 'ascii')
+    main()
 
 
 if __name__ == "__main__":

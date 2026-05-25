@@ -3,6 +3,7 @@ import json
 import argparse
 from pathlib import Path
 from collections import defaultdict, deque
+from concurrent.futures import ThreadPoolExecutor
 
 from analyzer_utils import (
     parse_gradle_file_scoped,
@@ -10,6 +11,7 @@ from analyzer_utils import (
     load_config,
     get_icon,
     normalize_module_name,
+    find_gradle_file,
 )
 
 
@@ -45,17 +47,21 @@ class ImpactAnalyzer:
         self._vprint(f"✓ {len(self.all_modules)} módulos encontrados\n")
         self._vprint("🔍 Construyendo grafo invertido de dependencias...")
 
-        for module in self.all_modules:
-            module_path = self.project_root / module.replace(":", "/")
-            gradle_file = module_path / "build.gradle.kts"
-            if not gradle_file.exists():
-                gradle_file = module_path / "build.gradle"
-            if not gradle_file.exists():
-                continue
-            scoped = parse_gradle_file_scoped(gradle_file, self.all_modules, module)
-            for scope_deps in scoped.values():
-                for dep in scope_deps:
-                    self.reverse_graph[dep].add(module)
+        all_modules  = self.all_modules
+        project_root = self.project_root
+
+        def _parse_one(module):
+            module_path = project_root / module.replace(":", "/")
+            gradle_file = find_gradle_file(module_path)
+            if gradle_file is None:
+                return module, {}
+            return module, parse_gradle_file_scoped(gradle_file, all_modules, module)
+
+        with ThreadPoolExecutor() as executor:
+            for module, scoped in executor.map(_parse_one, all_modules):
+                for scope_deps in scoped.values():
+                    for dep in scope_deps:
+                        self.reverse_graph[dep].add(module)
 
         return self
 

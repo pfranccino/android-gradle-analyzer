@@ -60,8 +60,19 @@ def list_modules(base_path) -> list:
 
 
 def normalize_module_name(path: str) -> str:
-    """Convierte separadores '/' y '\\' a ':' para la forma canónica de módulo."""
     return path.replace('/', ':').replace('\\', ':')
+
+
+def find_gradle_file(module_path: Path) -> Path | None:
+    for name in ("build.gradle.kts", "build.gradle"):
+        p = module_path / name
+        if p.exists():
+            return p
+    for pattern in ("*.gradle.kts", "*.gradle"):
+        candidates = sorted(module_path.glob(pattern))
+        if candidates:
+            return candidates[0]
+    return None
 
 
 def is_submodule_of(module: str, parent: str) -> bool:

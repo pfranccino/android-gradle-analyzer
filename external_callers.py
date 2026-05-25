@@ -4,6 +4,7 @@ import json
 import argparse
 from pathlib import Path
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 
 from analyzer_utils import (
     parse_gradle_file_scoped,
@@ -12,6 +13,7 @@ from analyzer_utils import (
     get_icon,
     normalize_module_name,
     is_submodule_of,
+    find_gradle_file,
 )
 
 
@@ -63,30 +65,29 @@ class ExternalCallersAnalyzer:
     def analyze_external_calls(self):
         self._vprint(f"🔍 Buscando quién llama a '{self.target_module}'...\n")
 
-        for module in self.all_modules:
-            if is_submodule_of(module, self.target_module):
-                continue
-            module_path = self.project_root / module.replace(':', '/')
-            gradle_file = module_path / "build.gradle.kts"
-            if not gradle_file.exists():
-                gradle_file = module_path / "build.gradle"
-            if gradle_file.exists():
-                self._check_gradle_for_calls(module, gradle_file)
+        external_modules  = [m for m in self.all_modules if not is_submodule_of(m, self.target_module)]
+        internal_modules  = self.internal_modules
+        project_root      = self.project_root
+
+        def _parse_one(module):
+            module_path = project_root / module.replace(':', '/')
+            gradle_file = find_gradle_file(module_path)
+            if gradle_file is None:
+                return module, {}
+            return module, parse_gradle_file_scoped(gradle_file, internal_modules, module)
+
+        with ThreadPoolExecutor() as executor:
+            for module, scoped_deps in executor.map(_parse_one, external_modules):
+                for scope, modules in scoped_deps.items():
+                    for target_submodule in modules:
+                        self.external_callers[module][target_submodule].add(scope)
+                        self._vprint(f"  🔗 {module} → {target_submodule} [{scope}]")
 
         total_calls = sum(len(targets) for targets in self.external_callers.values())
         self._vprint(f"\n✓ Análisis completado")
         self._vprint(f"✓ {len(self.external_callers)} módulos externos llaman a {self.target_module}")
         self._vprint(f"✓ {total_calls} conexiones externas detectadas\n")
         return self
-
-    def _check_gradle_for_calls(self, caller_module, gradle_file):
-        scoped_deps = parse_gradle_file_scoped(
-            gradle_file, self.internal_modules, caller_module
-        )
-        for scope, modules in scoped_deps.items():
-            for target_submodule in modules:
-                self.external_callers[caller_module][target_submodule].add(scope)
-                self._vprint(f"  🔗 {caller_module} → {target_submodule} [{scope}]")
 
     def generate_plantuml(self):
         colors = self.config.get("colors", {})
