@@ -142,3 +142,23 @@ class TestParseSettingsModules:
         modules = parse_settings_modules(FIXTURES / "with_settings")
         assert "." not in (modules or [])
         assert "" not in (modules or [])
+
+    def test_detects_modules_without_leading_colon(self):
+        """include("app") sin ':' inicial debe detectarse igual que include(":app")."""
+        modules = parse_settings_modules(FIXTURES / "with_settings_no_colon")
+        assert modules is not None
+        assert "app" in modules
+        assert "core" in modules
+        assert "feature:home" in modules
+
+    def test_includeBuild_not_counted_as_module(self):
+        """includeBuild('build-logic') no debe contarse como módulo del proyecto."""
+        modules = parse_settings_modules(FIXTURES / "with_settings_no_colon")
+        assert modules is not None
+        assert "build-logic" not in modules
+
+    def test_classic_groovy_syntax_still_works(self):
+        """Sintaxis Groovy clásica include ':app' sigue funcionando."""
+        modules = parse_settings_modules(FIXTURES / "with_settings")
+        assert modules is not None
+        assert "app" in modules

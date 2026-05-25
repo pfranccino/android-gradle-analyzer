@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.0.7] - 2026-05-25
+
+### Fixed
+- `parse_settings_modules`: detección de módulos con sintaxis `include("modulo")` sin `:` inicial (común en proyectos Android Groovy DSL que adoptan convenciones tipo Kotlin). Antes devolvía 0 módulos silenciosamente. `includeBuild` ya no se cuenta como módulo del proyecto.
+
 ## [1.0.6] - 2026-05-24
 
 ### Added

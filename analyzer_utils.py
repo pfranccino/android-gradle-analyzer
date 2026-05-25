@@ -23,7 +23,7 @@ def setup_utf8() -> None:
 
 # ─── Detección de módulos ──────────────────────────────────────────────────
 
-_INCLUDE_RE = re.compile(r'["\'](:[\w:/-]+)["\']')
+_INCLUDE_RE = re.compile(r'["\'](:?[\w:/-]+)["\']')
 
 
 def _extract_includes(settings_path) -> list:
@@ -32,6 +32,8 @@ def _extract_includes(settings_path) -> list:
     for line in content.splitlines():
         stripped = line.strip()
         if stripped.startswith(('//', '*', '/*')) or 'include' not in stripped:
+            continue
+        if 'includeBuild' in stripped:
             continue
         for match in _INCLUDE_RE.finditer(stripped):
             normalized = normalize_module_name(match.group(1).lstrip(':'))
