@@ -5,6 +5,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-05-24
+
+### Added
+- Graphviz DOT format (`--format dot` / `gradle-dot`) con colores por tipo de módulo
+- ASCII format (`--format ascii` / `gradle-ascii`) para visualización en terminal
+- `--focus <module[,module]>`: zoom al subgrafo de un módulo en todos los formatos
+- Entry points independientes `gradle-dot` y `gradle-ascii`
+- Parsing paralelo con `ThreadPoolExecutor` en los 3 analizadores (gradle-analyzer, gradle-externals, gradle-impact)
+
+### Fixed
+- Build files con nombre custom (ej. `chat.gradle.kts`) ahora se detectan correctamente — fix para proyectos como MEGA Android que no usan `build.gradle.kts` estándar
+
 ## [1.0.0] - 2026-05-24
 
 ### Added
