@@ -5,6 +5,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-05-24
+
+### Added
+- Menú interactivo: formato DOT y ASCII disponibles en el selector de formato
+- Menú interactivo: prompt de zoom (`--focus`) en análisis de dependencias internas
+- Menú interactivo: ASCII se muestra inline en el panel del terminal
+- Menú interactivo: offer post-análisis para renderizar DOT a PNG/SVG con Graphviz local
+
 ## [1.0.1] - 2026-05-24
 
 ### Added
