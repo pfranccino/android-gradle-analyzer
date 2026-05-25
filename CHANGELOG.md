@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.0.9] - 2026-05-25
+
+### Fixed
+- Mermaid: grafos grandes (>500 edges) fallaban silenciosamente por el límite default del parser. Se agrega header `%%{init}%%` con `maxEdges: 10000`, `maxTextSize: 200000`, `htmlLabels: true`, `curve: basis` y `wrappingWidth: 200`
+
 ## [1.0.8] - 2026-05-25
 
 ### Fixed

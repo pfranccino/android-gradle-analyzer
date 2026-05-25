@@ -194,7 +194,7 @@ class GradleDependencyAnalyzer:
             test_deps    = self._test_deps(from_module) & module_set
 
             for to_module in sorted(compile_deps):
-                lines.append(f"  {from_id} --> {to_module.replace('-','_').replace(':','_')} : uses")
+                lines.append(f"  {from_id} --> {to_module.replace('-','_').replace(':','_')} : impl")
             for to_module in sorted(build_deps - compile_deps):
                 lines.append(f"  {from_id} ..> {to_module.replace('-','_').replace(':','_')} : build")
             for to_module in sorted(test_deps - compile_deps - build_deps):
@@ -212,6 +212,15 @@ class GradleDependencyAnalyzer:
         colors        = self.config.get("colors", {})
 
         lines = [
+            "%%{init: {"
+            "'flowchart': {"
+            "'maxEdges': 10000, "
+            "'htmlLabels': true, "
+            "'curve': 'basis', "
+            "'wrappingWidth': 200"
+            "}, "
+            "'maxTextSize': 200000"
+            "}}%%",
             "graph TD",
             f'  subgraph {pkg_id}["📦 {package_name}"]',
             "",
@@ -231,7 +240,7 @@ class GradleDependencyAnalyzer:
             test_deps    = self._test_deps(from_module) & module_set
 
             for to_module in sorted(compile_deps):
-                lines.append(f"    {from_id} -->|uses| {to_module.replace('-','_').replace(':','_')}")
+                lines.append(f"    {from_id} --> {to_module.replace('-','_').replace(':','_')}")
             for to_module in sorted(build_deps - compile_deps):
                 lines.append(f"    {from_id} -.->|build| {to_module.replace('-','_').replace(':','_')}")
             for to_module in sorted(test_deps - compile_deps - build_deps):
