@@ -5,6 +5,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-05-24
+
+### Added
+- Soporte para `analyzer.yml` en la raíz del proyecto analizado — configura defaults de CLI sin pasar flags manualmente
+
+## [1.0.5] - 2026-05-24
+
+### Fixed
+- Colones en nombres de archivo en Windows (`external_callers`) — módulos como `core:analytics:tracker` generaban `[Errno 22]`
+
 ## [1.0.4] - 2026-05-24
 
 ### Fixed
