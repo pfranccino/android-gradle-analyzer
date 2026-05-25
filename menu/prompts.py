@@ -172,18 +172,16 @@ def ask_module(modules: list[str], prompt: str = "Módulo a analizar") -> str | 
 # ── Pedir formato de salida ───────────────────────────────────────────────────
 
 def ask_format() -> str | None:
-    """
-    Solicita el formato de salida para diagramas.
-    Devuelve None si el usuario cancela o elige Volver.
-    """
     answer = questionary.select(
         "Formato de salida:",
         choices=[
-            questionary.Choice("Todos (PlantUML + Mermaid + TXT)", value="all"),
-            questionary.Choice("PlantUML (.puml)",                  value="plantuml"),
-            questionary.Choice("Mermaid (.mmd)",                    value="mermaid"),
+            questionary.Choice("Todos  (PlantUML + Mermaid + DOT + ASCII)", value="all"),
+            questionary.Choice("PlantUML  (.puml)",                          value="plantuml"),
+            questionary.Choice("Mermaid   (.mmd)",                           value="mermaid"),
+            questionary.Choice("Graphviz  (.dot)",                           value="dot"),
+            questionary.Choice("ASCII     (terminal)",                       value="ascii"),
             questionary.Separator(),
-            questionary.Choice("← Volver",                          value=BACK),
+            questionary.Choice("← Volver",                                   value=BACK),
         ],
         style=_STYLE,
         use_shortcuts=False,
@@ -192,6 +190,29 @@ def ask_format() -> str | None:
     if answer is None or answer == BACK:
         return None
     return answer
+
+
+def ask_focus(modules: list[str]) -> str | None:
+    _NONE = "__none__"
+    sel = questionary.select(
+        "¿Hacer zoom en un módulo específico?",
+        choices=[
+            questionary.Choice("No — mostrar todos los módulos", value=_NONE),
+            questionary.Choice("Sí — elegir módulo...",          value="__pick__"),
+            questionary.Separator(),
+            questionary.Choice("← Volver",                       value=BACK),
+        ],
+        style=_STYLE,
+        use_shortcuts=False,
+        instruction="(↑↓  ↵ elegir  Esc cancelar)",
+    ).ask()
+
+    if sel is None or sel == BACK:
+        return BACK
+    if sel == _NONE:
+        return None
+
+    return ask_module(modules, "Módulo focal (muestra solo él y sus dependencias)")
 
 
 # ── Pedir formatos de export ──────────────────────────────────────────────────

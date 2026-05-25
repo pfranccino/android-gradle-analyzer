@@ -30,6 +30,7 @@ def run_internal(
     exclude: list[str] | None = None,
     output_dir: str = "diagrams",
     config: str | None = None,
+    focus: str | None = None,
 ) -> dict:
     """
     Analiza dependencias internas de un módulo Android.
@@ -46,10 +47,12 @@ def run_internal(
             exclude=exclude or [],
         )
 
+        focus_list = [m.strip() for m in focus.split(',')] if focus else None
+
         def _run():
             analyzer.scan_modules()
             analyzer.analyze_gradle_dependencies()
-            analyzer.save_all(output_dir=output_dir, fmt=fmt)
+            analyzer.save_all(output_dir=output_dir, fmt=fmt, focus=focus_list)
 
         _, log = _capture(_run)
 

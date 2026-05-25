@@ -111,25 +111,60 @@ def _handle_export(last_result, prompts, ui, console,
 def _offer_plantuml_open(outputs, console, open_plantuml_online, render_plantuml_local):
     import questionary
     puml_files = [f for f in outputs if f.endswith(".puml")]
-    if not puml_files:
+    dot_files  = [f for f in outputs if f.endswith(".dot")]
+
+    if puml_files:
+        puml   = puml_files[0]
+        answer = questionary.select(
+            "¿Qué hacemos con el diagrama PlantUML?",
+            choices=[
+                questionary.Choice("Abrir en plantuml.com (browser)",         value="online"),
+                questionary.Choice("Renderizar localmente (plantuml en PATH)", value="local"),
+                questionary.Choice("← Nada, continuar",                       value=None),
+            ],
+            instruction="(↑↓  ↵ elegir  Esc omitir)",
+        ).ask()
+        if answer == "online":
+            ok = open_plantuml_online(puml)
+            console.print("  [green]✓[/green] Browser abierto." if ok else
+                          "  [yellow]⚠[/yellow] No se pudo abrir el browser.")
+        elif answer == "local":
+            ok, msg = render_plantuml_local(puml)
+            console.print(f"  [green]✓[/green] {msg}" if ok else f"  [yellow]⚠[/yellow] {msg}")
+
+    if dot_files:
+        dot    = dot_files[0]
+        answer = questionary.select(
+            "¿Qué hacemos con el diagrama Graphviz DOT?",
+            choices=[
+                questionary.Choice("Renderizar a PNG  (dot en PATH)", value="png"),
+                questionary.Choice("Renderizar a SVG  (dot en PATH)", value="svg"),
+                questionary.Choice("← Nada, continuar",               value=None),
+            ],
+            instruction="(↑↓  ↵ elegir  Esc omitir)",
+        ).ask()
+        if answer in ("png", "svg"):
+            _render_dot(dot, answer, console)
+
+
+def _render_dot(dot_path: str, fmt: str, console) -> None:
+    import shutil
+    import subprocess
+    if not shutil.which("dot"):
+        console.print("  [yellow]⚠[/yellow] 'dot' no encontrado en el PATH. Instalá Graphviz.")
         return
-    puml   = puml_files[0]
-    answer = questionary.select(
-        "¿Qué hacemos con el diagrama PlantUML?",
-        choices=[
-            questionary.Choice("Abrir en plantuml.com (browser)",      value="online"),
-            questionary.Choice("Renderizar localmente (plantuml en PATH)", value="local"),
-            questionary.Choice("← Nada, continuar",                    value=None),
-        ],
-        instruction="(↑↓  ↵ elegir  Esc omitir)",
-    ).ask()
-    if answer == "online":
-        ok = open_plantuml_online(puml)
-        console.print("  [green]✓[/green] Browser abierto." if ok else
-                      "  [yellow]⚠[/yellow] No se pudo abrir el browser.")
-    elif answer == "local":
-        ok, msg = render_plantuml_local(puml)
-        console.print(f"  [green]✓[/green] {msg}" if ok else f"  [yellow]⚠[/yellow] {msg}")
+    out = dot_path.replace(".dot", f".{fmt}")
+    try:
+        result = subprocess.run(
+            ["dot", f"-T{fmt}", dot_path, "-o", out],
+            capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode == 0:
+            console.print(f"  [green]✓[/green] {fmt.upper()} generado: [cyan]{out}[/cyan]")
+        else:
+            console.print(f"  [yellow]⚠[/yellow] {result.stderr.strip()}")
+    except Exception as exc:
+        console.print(f"  [yellow]⚠[/yellow] {exc}")
 
 
 def _post_analysis(result, action, project, module,
@@ -155,6 +190,12 @@ def _post_analysis(result, action, project, module,
     set_last_project(project)
     if module:
         set_last_module(module)
+
+    ascii_files = [f for f in outputs if f.endswith(".txt") and "dependencies" in f]
+    if ascii_files:
+        from pathlib import Path as _Path
+        content = _Path(ascii_files[0]).read_text(encoding="utf-8")
+        console.print(content)
 
     _offer_plantuml_open(outputs, console, open_plantuml_online, render_plantuml_local)
 
@@ -184,15 +225,25 @@ def _action_internal(last_result, deps):
      prompts, actions, ui, to_html, to_pdf, to_markdown, to_zip, PDF_AVAILABLE,
      open_plantuml_online, render_plantuml_local, list_modules) = deps
 
-    path, _ = _get_project_and_modules(prompts, list_modules)
+    path, modules = _get_project_and_modules(prompts, list_modules)
     if not path:
         return last_result
     fmt = prompts.ask_format()
     if not fmt:
         return last_result
-    with ui.analysis_spinner("Analizando dependencias internas..."):
-        result = actions.run_internal(path=path, fmt=fmt, output_dir="diagrams")
-    ctx = _post_analysis(result, "internal", path, None,
+
+    focus_answer = prompts.ask_focus(modules)
+    if focus_answer == prompts.BACK:
+        return last_result
+    focus = focus_answer
+
+    spinner_msg = (
+        f"Analizando '{focus}'..." if focus else "Analizando dependencias internas..."
+    )
+    with ui.analysis_spinner(spinner_msg):
+        result = actions.run_internal(path=path, fmt=fmt, output_dir="diagrams", focus=focus)
+
+    ctx = _post_analysis(result, "internal", path, focus,
                          ui, prompts, console, add_history_entry,
                          set_last_project, set_last_module,
                          open_plantuml_online, render_plantuml_local,
