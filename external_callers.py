@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
-"""
-Analizador de llamadas externas a módulos
-Detecta qué módulos externos (app, otros features) llaman a tus módulos
-"""
-
+import sys
+import json
 import argparse
 from pathlib import Path
 from collections import defaultdict
 
 from analyzer_utils import (
     parse_gradle_file_scoped,
+    parse_settings_modules,
     load_config,
     get_icon,
     normalize_module_name,
@@ -18,94 +16,80 @@ from analyzer_utils import (
 
 
 class ExternalCallersAnalyzer:
-    def __init__(self, project_root, target_module, config_path=None):
-        """
-        Args:
-            project_root:  Ruta raíz del proyecto (ej: /ruta/a/tu/android-project)
-            target_module: Módulo a analizar (ej: payments)
-            config_path:   Ruta opcional a analyzer_config.json
-        """
-        self.project_root  = Path(project_root)
-        self.target_module = target_module
-        self.config        = load_config(config_path)
-
+    def __init__(self, project_root, target_module, config_path=None, verbose=True):
+        self.project_root   = Path(project_root)
+        self.target_module  = target_module
+        self.config         = load_config(config_path)
         self.internal_modules = []
         self.all_modules      = []
-
-        # {caller_module: {target_submodule: set(scopes)}}
         self.external_callers = defaultdict(lambda: defaultdict(set))
+        self._vprint          = print if verbose else (lambda *a, **k: None)
 
     def scan_all_modules(self):
-        """Escanea TODOS los módulos del proyecto"""
-        print(f"📁 Escaneando proyecto completo: {self.project_root}\n")
+        self._vprint(f"📁 Escaneando proyecto completo: {self.project_root}\n")
 
-        gradle_files = list(self.project_root.rglob("build.gradle*"))
+        from_settings = parse_settings_modules(self.project_root)
 
-        for gradle_file in sorted(gradle_files):
-            module_dir = gradle_file.parent
-            try:
-                rel_path    = module_dir.relative_to(self.project_root)
-                module_name = normalize_module_name(str(rel_path))
-
-                if module_name == '.':
-                    continue
-
+        if from_settings is not None:
+            for module_name in from_settings:
                 self.all_modules.append(module_name)
-
                 if is_submodule_of(module_name, self.target_module):
                     self.internal_modules.append(module_name)
-                    print(f"  ✓ [INTERNO] {module_name}")
+                    self._vprint(f"  ✓ [INTERNO] {module_name}")
                 else:
-                    print(f"  ○ [EXTERNO] {module_name}")
+                    self._vprint(f"  ○ [EXTERNO] {module_name}")
+        else:
+            for gradle_file in sorted(self.project_root.rglob("build.gradle*")):
+                module_dir = gradle_file.parent
+                try:
+                    rel_path    = module_dir.relative_to(self.project_root)
+                    module_name = normalize_module_name(str(rel_path))
+                    if module_name == '.':
+                        continue
+                    self.all_modules.append(module_name)
+                    if is_submodule_of(module_name, self.target_module):
+                        self.internal_modules.append(module_name)
+                        self._vprint(f"  ✓ [INTERNO] {module_name}")
+                    else:
+                        self._vprint(f"  ○ [EXTERNO] {module_name}")
+                except ValueError:
+                    continue
 
-            except ValueError:
-                continue
-
-        print(f"\n✓ Total módulos: {len(self.all_modules)}")
-        print(f"✓ Módulos internos de {self.target_module}: {len(self.internal_modules)}")
-        print(f"✓ Módulos externos: {len(self.all_modules) - len(self.internal_modules)}\n")
+        self._vprint(f"\n✓ Total módulos: {len(self.all_modules)}")
+        self._vprint(f"✓ Módulos internos de {self.target_module}: {len(self.internal_modules)}")
+        self._vprint(f"✓ Módulos externos: {len(self.all_modules) - len(self.internal_modules)}\n")
         return self
 
     def analyze_external_calls(self):
-        """Analiza qué módulos externos llaman a los módulos del target"""
-        print(f"🔍 Buscando quién llama a '{self.target_module}'...\n")
+        self._vprint(f"🔍 Buscando quién llama a '{self.target_module}'...\n")
 
         for module in self.all_modules:
             if is_submodule_of(module, self.target_module):
                 continue
-
             module_path = self.project_root / module.replace(':', '/')
             gradle_file = module_path / "build.gradle.kts"
             if not gradle_file.exists():
                 gradle_file = module_path / "build.gradle"
-
             if gradle_file.exists():
                 self._check_gradle_for_calls(module, gradle_file)
 
         total_calls = sum(len(targets) for targets in self.external_callers.values())
-
-        print(f"\n✓ Análisis completado")
-        print(f"✓ {len(self.external_callers)} módulos externos llaman a {self.target_module}")
-        print(f"✓ {total_calls} conexiones externas detectadas\n")
+        self._vprint(f"\n✓ Análisis completado")
+        self._vprint(f"✓ {len(self.external_callers)} módulos externos llaman a {self.target_module}")
+        self._vprint(f"✓ {total_calls} conexiones externas detectadas\n")
         return self
 
     def _check_gradle_for_calls(self, caller_module, gradle_file):
-        """Revisa si un módulo externo llama a algún módulo interno"""
         scoped_deps = parse_gradle_file_scoped(
             gradle_file, self.internal_modules, caller_module
         )
         for scope, modules in scoped_deps.items():
             for target_submodule in modules:
                 self.external_callers[caller_module][target_submodule].add(scope)
-                print(f"  🔗 {caller_module} → {target_submodule} [{scope}]")
-
-    # ── Generadores ──────────────────────────────────────────────────────────
+                self._vprint(f"  🔗 {caller_module} → {target_submodule} [{scope}]")
 
     def generate_plantuml(self):
-        """Genera diagrama PlantUML de llamadas externas"""
-        package_name = self.target_module
-        colors       = self.config.get("colors", {})
-
+        colors = self.config.get("colors", {})
         lines = [
             "@startuml",
             "",
@@ -113,17 +97,15 @@ class ExternalCallersAnalyzer:
             "skinparam linetype ortho",
             "skinparam backgroundColor white",
             "",
-            "' Colores",
             f'skinparam classBackgroundColor<<internal>> {colors.get("hub", "#E8F5E9")}',
             "skinparam classBackgroundColor<<external>> #FFE0B2",
             "skinparam classBorderColor #757575",
             "",
-            "' Espaciado",
             "skinparam nodesep 120",
             "skinparam ranksep 120",
             "skinparam padding 20",
             "",
-            f'package "{package_name}" <<internal>> {{',
+            f'package "{self.target_module}" <<internal>> {{',
         ]
 
         called_modules = {t for targets in self.external_callers.values() for t in targets}
@@ -154,14 +136,12 @@ class ExternalCallersAnalyzer:
         return "\n".join(lines)
 
     def generate_mermaid(self):
-        """Genera diagrama Mermaid de llamadas externas"""
-        package_name = self.target_module
-        pkg_id       = package_name.replace('-', '_')
         colors       = self.config.get("colors", {})
+        pkg_id       = self.target_module.replace('-', '_')
 
         lines = [
             "graph LR",
-            f'  subgraph {pkg_id}["{package_name} 📦"]',
+            f'  subgraph {pkg_id}["{self.target_module} 📦"]',
         ]
 
         called_modules = {t for targets in self.external_callers.values() for t in targets}
@@ -191,7 +171,6 @@ class ExternalCallersAnalyzer:
         lines.append(f'  classDef internal fill:{colors.get("hub", "#E8F5E9")},stroke:#2E7D32')
         lines.append("  classDef external fill:#FFE0B2,stroke:#E65100")
 
-        # Aplicar estilos a los nodos
         internal_ids = [m.replace(':', '_').replace('-', '_') for m in sorted(called_modules)]
         external_ids = [c.replace(':', '_').replace('-', '_') for c in sorted(self.external_callers.keys())]
         if internal_ids:
@@ -202,7 +181,6 @@ class ExternalCallersAnalyzer:
         return "\n".join(lines)
 
     def generate_report(self):
-        """Genera reporte de texto"""
         lines = [
             "=" * 70,
             f"ANÁLISIS DE LLAMADAS EXTERNAS A {self.target_module.upper()}",
@@ -247,8 +225,20 @@ class ExternalCallersAnalyzer:
 
         return "\n".join(lines)
 
+    def to_json_dict(self) -> dict:
+        return {
+            "project": str(self.project_root),
+            "target":  self.target_module,
+            "external_callers": {
+                caller: {
+                    target: list(scopes)
+                    for target, scopes in targets.items()
+                }
+                for caller, targets in self.external_callers.items()
+            },
+        }
+
     def save_all(self, output_dir="external-calls", fmt="all"):
-        """Guarda los archivos generados según el formato solicitado"""
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
 
@@ -256,83 +246,65 @@ class ExternalCallersAnalyzer:
             plantuml_file = output_path / f"{self.target_module}-external-calls.puml"
             with open(plantuml_file, 'w', encoding='utf-8') as f:
                 f.write(self.generate_plantuml())
-            print(f"✓ PlantUML: {plantuml_file}")
+            self._vprint(f"✓ PlantUML: {plantuml_file}")
 
         if fmt in ('mermaid', 'all'):
             mermaid_file = output_path / f"{self.target_module}-external-calls.mmd"
             with open(mermaid_file, 'w', encoding='utf-8') as f:
                 f.write(self.generate_mermaid())
-            print(f"✓ Mermaid: {mermaid_file}")
+            self._vprint(f"✓ Mermaid: {mermaid_file}")
 
-        # El reporte siempre se genera
         report_file = output_path / f"{self.target_module}-external-report.txt"
         with open(report_file, 'w', encoding='utf-8') as f:
             f.write(self.generate_report())
-        print(f"✓ Reporte: {report_file}")
+        self._vprint(f"✓ Reporte: {report_file}")
 
-
-# ── CLI ───────────────────────────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser(
         description='Detecta qué módulos externos llaman a tu módulo Android'
     )
-    parser.add_argument(
-        'project_root',
-        help='Ruta raíz del proyecto Android (ej: /ruta/a/tu/android-project)'
-    )
-    parser.add_argument(
-        'target_module',
-        help='Nombre del módulo a analizar (ej: payments)'
-    )
-    parser.add_argument(
-        '--format',
-        choices=['plantuml', 'mermaid', 'all'],
-        default='all',
-        dest='fmt',
-        metavar='FORMAT',
-        help='Formato de salida: plantuml, mermaid, all (default: all)'
-    )
-    parser.add_argument(
-        '--output-dir',
-        default='external-calls',
-        dest='output_dir',
-        metavar='DIR',
-        help='Directorio de salida (default: external-calls)'
-    )
-    parser.add_argument(
-        '--config',
-        default=None,
-        metavar='PATH',
-        help='Ruta a archivo analyzer_config.json personalizado'
-    )
+    parser.add_argument('project_root')
+    parser.add_argument('target_module')
+    parser.add_argument('--format', choices=['plantuml', 'mermaid', 'all'], default='all',
+                        dest='fmt', metavar='FORMAT')
+    parser.add_argument('--output-dir', default='external-calls', dest='output_dir', metavar='DIR')
+    parser.add_argument('--config', default=None, metavar='PATH')
+    parser.add_argument('--quiet', action='store_true')
+    parser.add_argument('--json',  action='store_true')
 
     args = parser.parse_args()
 
-    print("🚀 Analizador de Llamadas Externas")
-    print("=" * 70)
+    if not args.quiet:
+        print("🚀 Analizador de Llamadas Externas")
+        print("=" * 70)
 
     analyzer = ExternalCallersAnalyzer(
         project_root=args.project_root,
         target_module=args.target_module,
         config_path=args.config,
+        verbose=not args.quiet,
     )
     analyzer.scan_all_modules()
     analyzer.analyze_external_calls()
 
-    print("\n📊 Generando archivos...")
-    print("=" * 70)
+    if not args.quiet:
+        print("\n📊 Generando archivos...")
+        print("=" * 70)
 
     analyzer.save_all(output_dir=args.output_dir, fmt=args.fmt)
 
-    print("\n" + analyzer.generate_report())
-
-    print("\n" + "=" * 70)
-    print("✅ ¡Análisis completado!")
-    print("=" * 70)
-    print("\n💡 Para visualizar:")
-    print("  • PlantUML: https://www.plantuml.com/plantuml/uml/")
-    print("  • Mermaid:  https://mermaid.live/")
+    if args.json:
+        print(json.dumps(analyzer.to_json_dict(), indent=2, ensure_ascii=False))
+    else:
+        print("\n" + analyzer.generate_report())
+        if not args.quiet:
+            print("\n" + "=" * 70)
+            print("✅ ¡Análisis completado!")
+            print("=" * 70)
+            print("\n💡 Para visualizar:")
+            print("  • PlantUML: https://www.plantuml.com/plantuml/uml/")
+            print("  • Mermaid:  https://mermaid.live/")
 
 
 if __name__ == "__main__":

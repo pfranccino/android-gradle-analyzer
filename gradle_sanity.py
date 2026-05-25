@@ -33,32 +33,26 @@ _HARDCODED_VERSION_RE = re.compile(
 
 
 class GradleSanityAnalyzer:
-    def __init__(self, base_path, config_path=None):
+    def __init__(self, base_path, config_path=None, verbose=True):
         self.base_path = Path(base_path)
         self.config    = load_config(config_path)
         self.weights   = self.config.get("sanity_weights", {})
+        self._vprint   = print if verbose else (lambda *a, **k: None)
 
-        # Análisis de dependencias (reutiliza el analizador existente)
-        self._dep = GradleDependencyAnalyzer(base_path, config_path)
+        self._dep = GradleDependencyAnalyzer(base_path, config_path, verbose=verbose)
 
-        # Métricas por módulo
-        self.ca          = {}   # {module: int}
-        self.ce          = {}   # {module: int}
-        self.instability = {}   # {module: float}
+        self.ca          = {}
+        self.ce          = {}
+        self.instability = {}
 
-        # Problemas detectados
-        self.cycles          = []   # [[m1, m2, m1], ...]
-        self.sdp_violations  = []   # [(from, to, I_from, I_to), ...]
-        self.api_issues      = []   # [(module, {api_deps}), ...]
-        self.fan_out_issues  = []   # [(module, ce), ...]
-        self.version_issues  = []   # [(module, [version_strings]), ...]
-        self.orphan_modules  = []   # [module, ...]
-
-    # ── Análisis ─────────────────────────────────────────────────────────────
+        self.cycles          = []
+        self.sdp_violations  = []
+        self.api_issues      = []
+        self.fan_out_issues  = []
+        self.version_issues  = []
+        self.orphan_modules  = []
 
     def analyze(self):
-        """Ejecuta el análisis completo."""
-        print(f"📁 Escaneando módulos en: {self.base_path}\n")
         self._dep.scan_modules()
         self._dep.analyze_gradle_dependencies()
 
@@ -427,52 +421,94 @@ class GradleSanityAnalyzer:
         output_path.mkdir(parents=True, exist_ok=True)
         report_file = output_path / "sanity-report.txt"
         report_file.write_text(self.generate_report(), encoding='utf-8')
-        print(f"✓ Reporte: {report_file}")
+        self._vprint(f"✓ Reporte: {report_file}")
 
+    def to_json_dict(self) -> dict:
+        return {
+            "path":    str(self.base_path),
+            "score":   self.compute_score(),
+            "modules": {
+                m: {
+                    "ca": self.ca.get(m, 0),
+                    "ce": self.ce.get(m, 0),
+                    "I":  round(self.instability.get(m, 0.0), 2),
+                }
+                for m in self._dep.modules
+            },
+            "cycles": [c for c in self.cycles],
+            "sdp_violations": [
+                {"from": frm, "to": to, "I_from": round(i_frm, 2), "I_to": round(i_to, 2)}
+                for frm, to, i_frm, i_to in self.sdp_violations
+            ],
+            "api_issues": [
+                {"module": m, "api_deps": list(deps)}
+                for m, deps in self.api_issues
+            ],
+            "fan_out_issues": [
+                {"module": m, "ce": ce}
+                for m, ce in self.fan_out_issues
+            ],
+            "version_issues": [
+                {"module": m, "versions": versions}
+                for m, versions in self.version_issues
+            ],
+            "orphan_modules": self.orphan_modules,
+        }
 
-# ── CLI ───────────────────────────────────────────────────────────────────
 
 def main():
+    import sys
+
     parser = argparse.ArgumentParser(
         description='Mide la sanidad arquitectónica de las dependencias Gradle de un módulo Android'
     )
-    parser.add_argument(
-        'path',
-        help='Ruta al directorio del módulo a analizar (ej: /ruta/a/tu/proyecto/payments)'
-    )
-    parser.add_argument(
-        '--output-dir',
-        default='sanity',
-        dest='output_dir',
-        metavar='DIR',
-        help='Directorio de salida (default: sanity)'
-    )
-    parser.add_argument(
-        '--config',
-        default=None,
-        metavar='PATH',
-        help='Ruta a archivo analyzer_config.json personalizado'
-    )
+    parser.add_argument('path')
+    parser.add_argument('--output-dir', default='sanity', dest='output_dir', metavar='DIR')
+    parser.add_argument('--config',     default=None, metavar='PATH')
+    parser.add_argument('--quiet',      action='store_true')
+    parser.add_argument('--json',       action='store_true')
+    parser.add_argument('--fail-on-cycle',        action='store_true', dest='fail_on_cycle')
+    parser.add_argument('--fail-on-score-below',  type=int, default=None, dest='fail_below', metavar='N')
 
     args = parser.parse_args()
 
-    print("🏥 Analizador de Sanidad de Dependencias Gradle")
-    print("=" * 70)
+    if not args.quiet:
+        print("🏥 Analizador de Sanidad de Dependencias Gradle")
+        print("=" * 70)
 
-    analyzer = GradleSanityAnalyzer(base_path=args.path, config_path=args.config)
+    analyzer = GradleSanityAnalyzer(
+        base_path=args.path,
+        config_path=args.config,
+        verbose=not args.quiet,
+    )
     analyzer.analyze()
-
-    print("\n📋 Generando reporte...")
-    print("=" * 70)
-
-    report = analyzer.generate_report()
-    print("\n" + report)
-
     analyzer.save_report(output_dir=args.output_dir)
 
-    print("=" * 70)
-    print("✅ ¡Análisis completado!")
-    print("=" * 70)
+    if args.json:
+        import json as _json
+        print(_json.dumps(analyzer.to_json_dict(), indent=2, ensure_ascii=False))
+    else:
+        print("\n" + analyzer.generate_report())
+        if not args.quiet:
+            print("=" * 70)
+            print("✅ ¡Análisis completado!")
+            print("=" * 70)
+
+    exit_code = 0
+    score = analyzer.compute_score()
+
+    if args.fail_on_cycle and analyzer.cycles:
+        if not args.quiet:
+            print(f"\n❌ Fallo: {len(analyzer.cycles)} ciclo(s) detectado(s)")
+        exit_code = 1
+
+    if args.fail_below is not None and score < args.fail_below:
+        if not args.quiet:
+            print(f"\n❌ Fallo: score {score} por debajo del umbral {args.fail_below}")
+        exit_code = 1
+
+    if exit_code:
+        sys.exit(exit_code)
 
 
 if __name__ == "__main__":

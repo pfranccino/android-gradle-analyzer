@@ -123,13 +123,9 @@ Antes de enviar un PR, prueba con:
 
 ### Features Buscadas
 
-- [ ] Soporte para `settings.gradle.kts`
-- [ ] Detección de dependencias transitivas
-- [ ] Análisis de dependencias circulares
-- [ ] Exportar a formato JSON/YAML
-- [ ] Modo interactivo/CLI mejorado
 - [ ] Análisis de performance de build
-- [ ] Sugerencias de optimización
+- [ ] Sugerencias de optimización automáticas
+- [ ] Comparación de grafos entre ramas
 
 ### Mejoras de Documentación
 

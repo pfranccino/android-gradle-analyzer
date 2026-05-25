@@ -21,7 +21,11 @@ Herramientas para **analizar, visualizar y medir la salud** de las dependencias 
 pipx install git+https://github.com/pfranccino/android-gradle-analyzer.git
 
 # Versión específica
+pipx install git+https://github.com/pfranccino/android-gradle-analyzer.git@v1.0.0
 pipx install git+https://github.com/pfranccino/android-gradle-analyzer.git@v0.1.0
+
+# Ver versión instalada
+gradle-analyzer-menu --version
 
 # 1 · Dependencias internas de un módulo
 gradle-analyzer /ruta/a/tu/proyecto/payments
@@ -36,6 +40,9 @@ gradle-externals /ruta/a/tu/proyecto payments
 # 3 · Score de sanidad (Ca/Ce/I, ciclos, anti-patrones)
 gradle-sanity /ruta/a/tu/proyecto/payments
 gradle-sanity .   # equivalente si ya estás en el módulo
+
+# 4 · Impacto de cambios — qué se rompe si cambio X
+gradle-impact /ruta/a/tu/proyecto payments:common
 ```
 
 <details>
@@ -76,7 +83,7 @@ gradle-analyzer-menu --version
 
 <table>
 <tr>
-<td width="33%" valign="top">
+<td width="25%" valign="top">
 
 ### 🔍 Dependencias internas
 Lee `build.gradle` / `build.gradle.kts` recursivamente y dibuja cómo dependen los módulos entre sí.
@@ -84,7 +91,7 @@ Lee `build.gradle` / `build.gradle.kts` recursivamente y dibuja cómo dependen l
 **Salida** · PlantUML · Mermaid · reporte de texto
 
 </td>
-<td width="33%" valign="top">
+<td width="25%" valign="top">
 
 ### 🌐 Llamadas externas
 Detecta qué módulos de **fuera** de tu feature lo están consumiendo. Útil para refactors seguros.
@@ -92,12 +99,20 @@ Detecta qué módulos de **fuera** de tu feature lo están consumiendo. Útil pa
 **Salida** · PlantUML · Mermaid · reporte de texto
 
 </td>
-<td width="33%" valign="top">
+<td width="25%" valign="top">
 
 ### 🏥 Sanidad arquitectónica
 Métricas Ca/Ce/I, detección de ciclos, violaciones SDP y score 0–100 con explicación.
 
-**Salida** · reporte detallado
+**Salida** · reporte detallado · JSON
+
+</td>
+<td width="25%" valign="top">
+
+### 💥 Impacto de cambios
+Dado un módulo, muestra qué otros módulos se romperían si cambia (BFS sobre el grafo invertido de dependencias).
+
+**Salida** · PlantUML · Mermaid · reporte de texto
 
 </td>
 </tr>
@@ -106,10 +121,14 @@ Métricas Ca/Ce/I, detección de ciclos, violaciones SDP y score 0–100 con exp
 ### Características destacadas
 
 - ✅ **Detección recursiva** sin importar la profundidad de los módulos
+- 📋 **`settings.gradle.kts` / `settings.gradle`** — si existe, se usa como fuente de verdad para los módulos
 - 🎨 **Colores por tipo** (common, gateway, features)
 - ⚠️ **Detección automática de ciclos**
 - 🔭 **Scopes soportados:** `implementation`, `api`, `kapt`, `compileOnly`, `testImplementation`, y más
 - ⚙️ **Configuración personalizable** via `analyzer_config.json`
+- 🤫 **`--quiet`** en todos los CLIs para suprimir output de progreso
+- 📄 **`--json`** en todos los CLIs para salida JSON (ideal para CI/CD)
+- 🚦 **`--fail-on-cycle` / `--fail-on-score-below N`** en `gradle-sanity` para integración con CI
 
 ---
 
@@ -128,6 +147,8 @@ gradle-analyzer <ruta_al_modulo>
 | `--output-dir <dir>` | Directorio de salida | `diagrams` |
 | `--exclude <module>` | Excluir un módulo (puede repetirse) | — |
 | `--config <path>` | Ruta a `analyzer_config.json` personalizado | auto-detect |
+| `--quiet` | Suprime output de progreso | off |
+| `--json` | Salida JSON a stdout | off |
 
 **Ejemplos:**
 
@@ -161,6 +182,8 @@ gradle-externals <ruta_proyecto> <nombre_modulo>
 | `--format plantuml\|mermaid\|all` | Formato de salida | `all` |
 | `--output-dir <dir>` | Directorio de salida | `external-calls` |
 | `--config <path>` | Config personalizado | auto-detect |
+| `--quiet` | Suprime output de progreso | off |
+| `--json` | Salida JSON a stdout | off |
 
 **Genera:**
 - `external-calls/<modulo>-external-calls.puml`
@@ -180,6 +203,10 @@ gradle-sanity <ruta_al_modulo>
 |---|---|---|
 | `--output-dir <dir>` | Directorio de salida | `sanity` |
 | `--config <path>` | Config personalizado | auto-detect |
+| `--quiet` | Suprime output de progreso | off |
+| `--json` | Salida JSON a stdout | off |
+| `--fail-on-cycle` | `exit 1` si se detecta algún ciclo | off |
+| `--fail-on-score-below N` | `exit 1` si el score es menor a N | off |
 
 **Ejemplo de reporte:**
 
@@ -226,7 +253,54 @@ Los pesos son configurables en `analyzer_config.json` bajo `sanity_weights`.
 </details>
 
 <details>
-<summary><b>4. Generar imágenes desde PlantUML</b></summary>
+<summary><b>4. Analizar impacto de cambios</b></summary>
+
+```bash
+gradle-impact <ruta_proyecto> <modulo>
+```
+
+Responde: **"¿qué módulos se rompen si cambio este módulo?"**
+
+Construye el grafo invertido de dependencias y hace BFS desde el módulo target, asignando un nivel a cada módulo impactado (1 = directo, 2 = transitivo, etc.).
+
+| Flag | Descripción | Default |
+|---|---|---|
+| `--format plantuml\|mermaid\|all` | Formato de salida | `all` |
+| `--output-dir <dir>` | Directorio de salida | `impact` |
+| `--config <path>` | Config personalizado | auto-detect |
+| `--quiet` | Suprime output de progreso | off |
+| `--json` | Salida JSON a stdout | off |
+
+**Ejemplo de reporte:**
+
+```
+IMPACTO DE CAMBIOS EN: PAYMENTS:COMMON
+
+Proyecto      : /ruta/proyecto
+Módulo        : payments:common
+Total módulos : 12
+
+  Nivel 1 — dependientes directos (2):
+    • payments:home
+    • payments:checkout
+
+  Nivel 2 — dependientes transitivos (2):
+    • payments:summary
+    • app
+
+  🔥 Impacto total: 4 módulos (33% del proyecto)
+     Cambiar payments:common requiere verificar 4 módulo(s).
+```
+
+**Genera:**
+- `impact/<modulo>-impact.puml`
+- `impact/<modulo>-impact.mmd`
+- `impact/<modulo>-impact-report.txt`
+
+</details>
+
+<details>
+<summary><b>5. Generar imágenes desde PlantUML</b></summary>
 
 ```bash
 # PNG
@@ -301,6 +375,25 @@ Solo incluí los campos que querés cambiar — el resto usa defaults.
 
 ---
 
+## 🚦 Integración CI/CD
+
+`gradle-sanity` tiene flags para fallar la build si se detectan problemas:
+
+```bash
+# Falla si hay ciclos
+gradle-sanity /ruta/proyecto --fail-on-cycle --quiet
+
+# Falla si el score cae por debajo de 70
+gradle-sanity /ruta/proyecto --fail-on-score-below 70 --quiet
+
+# Salida JSON para parsear en el pipeline
+gradle-sanity /ruta/proyecto --json > sanity-report.json
+```
+
+Ver el ejemplo completo en [`examples/github-actions-dependency-health.yml`](examples/github-actions-dependency-health.yml).
+
+---
+
 ## 🔭 Scopes soportados
 
 | Scope | Categoría visual |
@@ -319,12 +412,11 @@ Solo incluí los campos que querés cambiar — el resto usa defaults.
 ```
 android-gradle-analyzer/
 ├── README.md
+├── CHANGELOG.md
 ├── LICENSE
 ├── CONTRIBUTING.md
-├── EXAMPLES.md
 ├── pyproject.toml               ← instalación via pipx
 ├── requirements.txt             ← uso directo (git clone)
-├── setup.sh
 ├── menu.py                      ← wrapper: python3 menu.py
 ├── menu/                        ← paquete del menú interactivo
 │   ├── actions.py
@@ -337,7 +429,12 @@ android-gradle-analyzer/
 ├── analyzer_config.example.json ← config de ejemplo
 ├── gradle_analyzer.py           ← script 1: dependencias internas
 ├── external_callers.py          ← script 2: llamadas externas
-└── gradle_sanity.py             ← script 3: sanidad + score
+├── gradle_sanity.py             ← script 3: sanidad + score
+├── gradle_impact.py             ← script 4: impacto de cambios
+├── examples/
+│   └── github-actions-dependency-health.yml
+└── scripts/
+    └── bump_version.py          ← sincroniza versión y guía el release
 ```
 
 </details>
@@ -346,8 +443,9 @@ android-gradle-analyzer/
 <summary><b>Cómo funciona internamente</b></summary>
 
 **Detección de módulos**
-1. `rglob()` busca recursivamente todos los `build.gradle*`.
-2. Paths → nombres: `payments/home` → `payments:home`.
+1. Si existe `settings.gradle.kts` o `settings.gradle` en la raíz, se usa como fuente de verdad (extrae los `include(":module")`).
+2. Sino, `rglob()` busca todos los `build.gradle*` como fallback.
+3. Paths → nombres: `payments/home` → `payments:home`.
 
 **Extracción de dependencias**
 1. Lee cada `build.gradle`.

@@ -1,22 +1,19 @@
 #!/usr/bin/env python3
-"""
-Analizador de dependencias entre módulos Android
-Lee los archivos build.gradle / build.gradle.kts para detectar dependencias REALES
-"""
-
+import sys
+import json
 import argparse
 from pathlib import Path
 from collections import defaultdict
 
 from analyzer_utils import (
     parse_gradle_file_scoped,
+    parse_settings_modules,
     load_config,
     get_icon,
     get_style,
     detect_cycles,
 )
 
-# Agrupación visual de scopes en los diagramas
 _COMPILE_SCOPES = {'api', 'implementation', 'compileOnly'}
 _BUILD_SCOPES   = {'kapt', 'annotationProcessor'}
 _TEST_SCOPES    = {
@@ -27,55 +24,57 @@ _TEST_SCOPES    = {
 
 
 class GradleDependencyAnalyzer:
-    def __init__(self, base_path, config_path=None, exclude=None):
-        self.base_path = Path(base_path)
-        self.config    = load_config(config_path)
-        self.exclude   = set(exclude or [])
-        self.modules   = []
+    def __init__(self, base_path, config_path=None, exclude=None, verbose=True):
+        self.base_path    = Path(base_path)
+        self.config       = load_config(config_path)
+        self.exclude      = set(exclude or [])
+        self.modules      = []
         self.dependencies = defaultdict(lambda: defaultdict(set))
-        # estructura: {module: {scope: {modules}}}
         self.module_paths = {}
+        self._vprint      = print if verbose else (lambda *a, **k: None)
 
     def scan_modules(self):
-        """Escanea TODOS los módulos del proyecto recursivamente"""
-        print(f"📁 Escaneando TODOS los módulos en: {self.base_path}\n")
+        self._vprint(f"📁 Escaneando módulos en: {self.base_path}\n")
 
         if not self.base_path.exists():
             print("❌ Error: La ruta no existe")
             return self
 
-        gradle_files = list(self.base_path.rglob("build.gradle*"))
+        from_settings = parse_settings_modules(self.base_path)
 
-        for gradle_file in sorted(gradle_files):
-            module_dir = gradle_file.parent
-            try:
-                rel_path    = module_dir.relative_to(self.base_path)
-                module_name = str(rel_path).replace('/', ':').replace('\\', ':')
-
-                if module_name == '.':
-                    continue
-
+        if from_settings is not None:
+            for module_name in sorted(from_settings):
                 if module_name in self.exclude:
-                    print(f"  ⊘ {module_name} (excluido)")
+                    self._vprint(f"  ⊘ {module_name} (excluido)")
+                    continue
+                self.modules.append(module_name)
+                self.module_paths[module_name] = Path(module_name.replace(':', '/'))
+                self._vprint(f"  • {module_name}")
+        else:
+            for gradle_file in sorted(self.base_path.rglob("build.gradle*")):
+                module_dir = gradle_file.parent
+                try:
+                    rel_path    = module_dir.relative_to(self.base_path)
+                    module_name = str(rel_path).replace('/', ':').replace('\\', ':')
+                    if module_name == '.':
+                        continue
+                    if module_name in self.exclude:
+                        self._vprint(f"  ⊘ {module_name} (excluido)")
+                        continue
+                    self.modules.append(module_name)
+                    self.module_paths[module_name] = rel_path
+                    self._vprint(f"  • {module_name}")
+                except ValueError:
                     continue
 
-                self.modules.append(module_name)
-                self.module_paths[module_name] = rel_path
-                print(f"  • {module_name}")
-
-            except ValueError:
-                continue
-
-        print(f"\n✓ {len(self.modules)} módulos encontrados\n")
+        self._vprint(f"\n✓ {len(self.modules)} módulos encontrados\n")
         return self
 
     def analyze_gradle_dependencies(self):
-        """Analiza las dependencias desde los archivos gradle"""
-        print("🔍 Analizando archivos Gradle...")
+        self._vprint("🔍 Analizando archivos Gradle...")
 
         for module in self.modules:
             module_path = self.base_path / module.replace(':', '/')
-
             gradle_file = module_path / "build.gradle.kts"
             if not gradle_file.exists():
                 gradle_file = module_path / "build.gradle"
@@ -85,30 +84,26 @@ class GradleDependencyAnalyzer:
                 if scoped:
                     self.dependencies[module] = scoped
                     total = sum(len(v) for v in scoped.values())
-                    print(f"  ✓ {module}: {total} dependencia(s)")
+                    self._vprint(f"  ✓ {module}: {total} dependencia(s)")
                 else:
-                    print(f"  ○ {module}: sin dependencias internas")
+                    self._vprint(f"  ○ {module}: sin dependencias internas")
             else:
-                print(f"  ⚠️  No se encontró gradle para: {module}")
+                self._vprint(f"  ⚠️  No se encontró gradle para: {module}")
 
         total_deps = sum(
             len(mods)
             for scopes in self.dependencies.values()
             for mods in scopes.values()
         )
-        print(f"\n✓ Análisis completado: {total_deps} dependencias detectadas\n")
+        self._vprint(f"\n✓ Análisis completado: {total_deps} dependencias detectadas\n")
         return self
 
     def detect_dependency_cycles(self):
-        """Detecta ciclos en el grafo de dependencias"""
         return detect_cycles(self.dependencies)
 
-    # ── Generadores ──────────────────────────────────────────────────────────
-
     def generate_plantuml(self):
-        """Genera el código PlantUML"""
-        package_name = self.base_path.name
-        cycles       = self.detect_dependency_cycles()
+        package_name  = self.base_path.name
+        cycles        = self.detect_dependency_cycles()
         cycle_modules = {m for cycle in cycles for m in cycle}
         colors        = self.config.get("colors", {})
 
@@ -124,7 +119,6 @@ class GradleDependencyAnalyzer:
             f'skinparam classBackgroundColor<<cycle>>   {colors.get("cycle",   "#FFCDD2")}',
             "skinparam classBorderColor #757575",
             "",
-            "' Espaciado",
             "skinparam nodesep 150",
             "skinparam ranksep 150",
             "skinparam padding 30",
@@ -170,7 +164,6 @@ class GradleDependencyAnalyzer:
         return "\n".join(lines)
 
     def generate_mermaid(self):
-        """Genera el código Mermaid"""
         package_name  = self.base_path.name
         pkg_id        = package_name.replace('-', '_')
         cycles        = self.detect_dependency_cycles()
@@ -219,7 +212,6 @@ class GradleDependencyAnalyzer:
         lines.append("  end")
         lines.append("")
 
-        # Estilos
         lines.append(f'  classDef commonStyle  fill:{colors.get("common",  "#FFF9C4")},stroke:#F57F17,stroke-width:2px')
         lines.append(f'  classDef gatewayStyle fill:{colors.get("gateway", "#E1F5FE")},stroke:#0277BD,stroke-width:2px')
         lines.append(f'  classDef hubStyle     fill:{colors.get("hub",     "#E8F5E9")},stroke:#2E7D32,stroke-width:2px')
@@ -229,9 +221,9 @@ class GradleDependencyAnalyzer:
         def _ids(mods):
             return [m.replace('-', '_').replace(':', '_') for m in mods]
 
-        commons  = _ids(m for m in self.modules if any(k in m.lower() for k in ('common', 'core', 'shared')))
-        gateways = _ids(m for m in self.modules if any(k in m.lower() for k in ('gateway', 'network', 'remote')) or m.endswith(':api'))
-        hubs     = _ids(m for m in self.modules if any(k in m.lower() for k in ('home', 'main', 'hub')))
+        commons   = _ids(m for m in self.modules if any(k in m.lower() for k in ('common', 'core', 'shared')))
+        gateways  = _ids(m for m in self.modules if any(k in m.lower() for k in ('gateway', 'network', 'remote')) or m.endswith(':api'))
+        hubs      = _ids(m for m in self.modules if any(k in m.lower() for k in ('home', 'main', 'hub')))
         cycle_ids = _ids(m for m in cycle_modules if m in self.modules)
 
         if commons:
@@ -246,9 +238,7 @@ class GradleDependencyAnalyzer:
         return "\n".join(lines)
 
     def generate_report(self):
-        """Genera un reporte detallado en texto"""
         cycles = self.detect_dependency_cycles()
-
         total_deps = sum(
             len(mods)
             for scopes in self.dependencies.values()
@@ -314,8 +304,18 @@ class GradleDependencyAnalyzer:
 
         return "\n".join(lines)
 
+    def to_json_dict(self) -> dict:
+        return {
+            "path":    str(self.base_path),
+            "modules": self.modules,
+            "dependencies": {
+                m: {scope: list(deps) for scope, deps in scopes.items()}
+                for m, scopes in self.dependencies.items()
+            },
+            "cycles": self.detect_dependency_cycles(),
+        }
+
     def save_all(self, output_dir="diagrams", fmt="all"):
-        """Guarda los archivos generados según el formato solicitado"""
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
 
@@ -323,86 +323,65 @@ class GradleDependencyAnalyzer:
             plantuml_file = output_path / "gradle-dependencies.puml"
             with open(plantuml_file, 'w', encoding='utf-8') as f:
                 f.write(self.generate_plantuml())
-            print(f"✓ PlantUML: {plantuml_file}")
+            self._vprint(f"✓ PlantUML: {plantuml_file}")
 
         if fmt in ('mermaid', 'all'):
             mermaid_file = output_path / "gradle-dependencies.mmd"
             with open(mermaid_file, 'w', encoding='utf-8') as f:
                 f.write(self.generate_mermaid())
-            print(f"✓ Mermaid: {mermaid_file}")
+            self._vprint(f"✓ Mermaid: {mermaid_file}")
 
-        # El reporte siempre se genera
         report_file = output_path / "gradle-report.txt"
         with open(report_file, 'w', encoding='utf-8') as f:
             f.write(self.generate_report())
-        print(f"✓ Reporte: {report_file}")
+        self._vprint(f"✓ Reporte: {report_file}")
 
-
-# ── CLI ───────────────────────────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser(
         description='Analiza dependencias internas de módulos Android'
     )
-    parser.add_argument(
-        'path',
-        help='Ruta al directorio del módulo a analizar (ej: /ruta/a/tu/proyecto/payments)'
-    )
-    parser.add_argument(
-        '--format',
-        choices=['plantuml', 'mermaid', 'all'],
-        default='all',
-        dest='fmt',
-        metavar='FORMAT',
-        help='Formato de salida: plantuml, mermaid, all (default: all)'
-    )
-    parser.add_argument(
-        '--output-dir',
-        default='diagrams',
-        dest='output_dir',
-        metavar='DIR',
-        help='Directorio de salida (default: diagrams)'
-    )
-    parser.add_argument(
-        '--exclude',
-        action='append',
-        default=[],
-        metavar='MODULE',
-        help='Excluir un módulo del análisis (puede repetirse)'
-    )
-    parser.add_argument(
-        '--config',
-        default=None,
-        metavar='PATH',
-        help='Ruta a archivo analyzer_config.json personalizado'
-    )
+    parser.add_argument('path')
+    parser.add_argument('--format', choices=['plantuml', 'mermaid', 'all'], default='all',
+                        dest='fmt', metavar='FORMAT')
+    parser.add_argument('--output-dir', default='diagrams', dest='output_dir', metavar='DIR')
+    parser.add_argument('--exclude', action='append', default=[], metavar='MODULE')
+    parser.add_argument('--config', default=None, metavar='PATH')
+    parser.add_argument('--quiet', action='store_true', help='Suprime el output de progreso')
+    parser.add_argument('--json', action='store_true', help='Salida JSON a stdout')
 
     args = parser.parse_args()
 
-    print("🚀 Analizador de Dependencias via Gradle")
-    print("=" * 70)
+    if not args.quiet:
+        print("🚀 Analizador de Dependencias via Gradle")
+        print("=" * 70)
 
     analyzer = GradleDependencyAnalyzer(
         base_path=args.path,
         config_path=args.config,
         exclude=args.exclude,
+        verbose=not args.quiet,
     )
     analyzer.scan_modules()
     analyzer.analyze_gradle_dependencies()
 
-    print("\n📊 Generando archivos...")
-    print("=" * 70)
+    if not args.quiet:
+        print("\n📊 Generando archivos...")
+        print("=" * 70)
 
     analyzer.save_all(output_dir=args.output_dir, fmt=args.fmt)
 
-    print("\n" + analyzer.generate_report())
-
-    print("\n" + "=" * 70)
-    print("✅ ¡Análisis completado!")
-    print("=" * 70)
-    print("\n💡 Para visualizar:")
-    print("  • PlantUML: https://www.plantuml.com/plantuml/uml/")
-    print("  • Mermaid:  https://mermaid.live/")
+    if args.json:
+        print(json.dumps(analyzer.to_json_dict(), indent=2, ensure_ascii=False))
+    else:
+        print("\n" + analyzer.generate_report())
+        if not args.quiet:
+            print("\n" + "=" * 70)
+            print("✅ ¡Análisis completado!")
+            print("=" * 70)
+            print("\n💡 Para visualizar:")
+            print("  • PlantUML: https://www.plantuml.com/plantuml/uml/")
+            print("  • Mermaid:  https://mermaid.live/")
 
 
 if __name__ == "__main__":

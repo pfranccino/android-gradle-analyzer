@@ -46,27 +46,27 @@ def _timestamp() -> str:
 
 # ── HTML ──────────────────────────────────────────────────────────────────────
 
-def to_html(summary: str, dest: str | None = None, project_name: str = "analysis") -> str:
-    """
-    Genera un HTML rico con el contenido del dashboard capturado.
-
-    Args:
-        summary: texto del reporte (str)
-        dest:    ruta destino del archivo HTML (auto si None)
-        project_name: nombre base para el archivo
-
-    Returns:
-        Ruta del archivo generado
-    """
+def to_html(
+    summary: str,
+    dest: str | None = None,
+    project_name: str = "analysis",
+    mermaid_content: str | None = None,
+) -> str:
     if dest is None:
         dest = f"{project_name}-{_timestamp()}.html"
 
-    # Capturar el summary como HTML usando Rich
     capture_console = Console(record=True, width=100)
     capture_console.print(summary)
     html_body = capture_console.export_html(inline_styles=True)
 
-    # Inyectar footer del autor
+    if mermaid_content:
+        mermaid_html = (
+            '<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>'
+            '<script>mermaid.initialize({startOnLoad:true,theme:"default"});</script>'
+            f'<div class="mermaid" style="margin:2em auto;max-width:900px;">{mermaid_content}</div>'
+        )
+        html_body = html_body.replace("</body>", f"{mermaid_html}</body>")
+
     footer_html = f'<p style="color:#888;font-size:0.85em;text-align:center;margin-top:2em;">{EXPORT_FOOTER}</p>'
     html_body = html_body.replace("</body>", f"{footer_html}</body>")
 

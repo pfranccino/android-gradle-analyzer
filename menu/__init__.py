@@ -81,7 +81,7 @@ def _handle_export(last_result, prompts, ui, console,
     generated = []
 
     if "html" in formats:
-        path = to_html(summary, project_name=project_name)
+        path = to_html(summary, project_name=project_name, mermaid_content=mermaid_content)
         generated.append(path)
         console.print(f"  [green]✓[/green] HTML: [cyan]{path}[/cyan]")
 

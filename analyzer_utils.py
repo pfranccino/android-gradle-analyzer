@@ -11,18 +11,39 @@ from collections import defaultdict
 
 # ─── Detección de módulos ──────────────────────────────────────────────────
 
-def list_modules(base_path) -> list:
-    """
-    Devuelve la lista de módulos detectados en base_path escaneando
-    build.gradle / build.gradle.kts recursivamente.
+_INCLUDE_RE = re.compile(r'["\'](:[\w:/-]+)["\']')
 
-    Args:
-        base_path: str o Path al directorio raíz del proyecto Android.
 
-    Returns:
-        list[str] de nombres de módulo (ej. ['payments:common', 'payments:home'])
-    """
+def _extract_includes(settings_path) -> list:
+    content = Path(settings_path).read_text(encoding='utf-8')
+    modules = []
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(('//', '*', '/*')) or 'include' not in stripped:
+            continue
+        for match in _INCLUDE_RE.finditer(stripped):
+            normalized = normalize_module_name(match.group(1).lstrip(':'))
+            if normalized and normalized not in modules:
+                modules.append(normalized)
+    return modules
+
+
+def parse_settings_modules(base_path) -> list | None:
     base = Path(base_path)
+    for filename in ("settings.gradle.kts", "settings.gradle"):
+        settings = base / filename
+        if settings.exists():
+            return _extract_includes(settings)
+    return None
+
+
+def list_modules(base_path) -> list:
+    base = Path(base_path)
+
+    from_settings = parse_settings_modules(base)
+    if from_settings is not None:
+        return from_settings
+
     modules = []
     for gradle_file in sorted(base.rglob("build.gradle*")):
         module_dir = gradle_file.parent

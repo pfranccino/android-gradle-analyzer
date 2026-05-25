@@ -1,0 +1,93 @@
+name: Android Dependency Health
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  dependency-health:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install android-gradle-analyzer
+        run: pipx install git+https://github.com/pfranccino/android-gradle-analyzer.git
+
+      - name: Check for dependency cycles
+        run: |
+          gradle-sanity ${{ github.workspace }} \
+            --fail-on-cycle \
+            --quiet \
+            --json > sanity-report.json
+        # Exits with code 1 if any cycle is detected.
+        # Remove --fail-on-cycle to report cycles without failing the build.
+
+      - name: Enforce minimum architecture score
+        run: |
+          gradle-sanity ${{ github.workspace }} \
+            --fail-on-score-below 70 \
+            --quiet
+        # Exits with code 1 if the score drops below 70 (0-100 scale).
+        # Tune the threshold to match your team's baseline.
+
+      - name: Generate dependency diagram
+        if: always()
+        run: |
+          gradle-analyzer ${{ github.workspace }} \
+            --format mermaid \
+            --output-dir diagrams \
+            --quiet
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-reports
+          path: |
+            diagrams/
+            sanity/
+            sanity-report.json
+          retention-days: 30
+
+  impact-check:
+    runs-on: ubuntu-latest
+    # Optional: run only when a specific module changes.
+    # Uncomment the paths filter and set the module name below.
+    # on:
+    #   push:
+    #     paths:
+    #       - 'core/**'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install android-gradle-analyzer
+        run: pipx install git+https://github.com/pfranccino/android-gradle-analyzer.git
+
+      - name: Analyze change impact
+        run: |
+          gradle-impact ${{ github.workspace }} core \
+            --format mermaid \
+            --output-dir impact \
+            --quiet
+        # Replace 'core' with the module you want to monitor.
+        # The report shows which modules are affected if 'core' changes.
+
+      - name: Upload impact report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: impact-report
+          path: impact/
+          retention-days: 30

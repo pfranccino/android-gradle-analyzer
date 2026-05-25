@@ -6,7 +6,7 @@ Tests para analyzer_utils.py:
 
 from pathlib import Path
 
-from analyzer_utils import parse_gradle_file_scoped, detect_cycles
+from analyzer_utils import parse_gradle_file_scoped, detect_cycles, parse_settings_modules, list_modules
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -114,3 +114,31 @@ class TestDetectCycles:
 
         cycles = analyzer.detect_dependency_cycles()
         assert len(cycles) >= 1
+
+
+# ── parse_settings_modules ────────────────────────────────────────────────────
+
+class TestParseSettingsModules:
+
+    def test_returns_modules_from_settings(self):
+        """Lee settings.gradle.kts y devuelve los módulos incluidos."""
+        modules = parse_settings_modules(FIXTURES / "with_settings")
+        assert modules is not None
+        assert "app" in modules
+        assert "core" in modules
+
+    def test_returns_none_when_no_settings(self):
+        """Sin settings.gradle* devuelve None para indicar fallback."""
+        modules = parse_settings_modules(FIXTURES / "simple")
+        assert modules is None
+
+    def test_list_modules_uses_settings_when_present(self):
+        """list_modules usa settings.gradle.kts si existe (no rglob)."""
+        modules = list_modules(FIXTURES / "with_settings")
+        assert set(modules) == {"app", "core"}
+
+    def test_settings_excludes_root(self):
+        """El módulo raíz '.' nunca debe aparecer en la lista."""
+        modules = parse_settings_modules(FIXTURES / "with_settings")
+        assert "." not in (modules or [])
+        assert "" not in (modules or [])

@@ -5,6 +5,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-05-24
+
+### Added
+- `gradle-impact`: nuevo analizador de impacto de cambios — dado un módulo, muestra qué otros módulos se ven afectados (BFS sobre grafo invertido, niveles directos y transitivos)
+- `--quiet` en todos los CLIs para suprimir output de progreso (ideal para CI)
+- `--json` en todos los CLIs para salida estructurada a stdout
+- `--fail-on-cycle` en `gradle-sanity`: `exit 1` si se detecta algún ciclo (CI gate)
+- `--fail-on-score-below N` en `gradle-sanity`: `exit 1` si el score cae por debajo de N
+- Sección de módulos huérfanos en reporte de sanidad (Ca=0 y Ce=0, sin penalización)
+- Parsing de `settings.gradle.kts` / `settings.gradle` como fuente de verdad para módulos
+- HTML export con Mermaid embebido (renderizado inline via CDN)
+- `examples/github-actions-dependency-health.yml`: ejemplo de integración GitHub Actions
+- `scripts/bump_version.py`: script de versionado semántico
+- `CHANGELOG.md` con formato Keep a Changelog
+
+### Fixed
+- Falsos positivos en detección de versiones hardcodeadas: las versiones dentro de comentarios (`// "lib:x:1.2.3"`) ya no se reportan
+
 ## [0.1.0] - 2026-05-24
 
 ### Added
