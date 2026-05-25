@@ -193,26 +193,50 @@ def ask_format() -> str | None:
 
 
 def ask_focus(modules: list[str]) -> str | None:
-    _NONE = "__none__"
-    sel = questionary.select(
-        "¿Hacer zoom en un módulo específico?",
-        choices=[
-            questionary.Choice("No — mostrar todos los módulos", value=_NONE),
-            questionary.Choice("Sí — elegir módulo...",          value="__pick__"),
-            questionary.Separator(),
-            questionary.Choice("← Volver",                       value=BACK),
-        ],
+    """
+    Permite elegir un módulo focal o ver todos.
+    Devuelve:
+      None  → sin zoom, mostrar todos
+      BACK  → cancelar y volver
+      str   → módulo elegido
+    """
+    _ALL = "__all__"
+
+    if len(modules) > 15:
+        all_choices = ["📦  Todos los módulos"] + modules + ["← Volver"]
+        answer = questionary.autocomplete(
+            "Módulo focal (Enter = todos los módulos):",
+            choices=all_choices,
+            default="📦  Todos los módulos",
+            style=_STYLE,
+        ).ask()
+        if answer is None or answer == "← Volver":
+            return BACK
+        if answer == "📦  Todos los módulos":
+            return None
+        return answer if answer in modules else None
+
+    choices = [
+        questionary.Choice("📦  Todos los módulos", value=_ALL),
+        questionary.Separator(),
+    ]
+    for m in modules:
+        choices.append(questionary.Choice(m, value=m))
+    choices += [questionary.Separator(), questionary.Choice("← Volver", value=BACK)]
+
+    answer = questionary.select(
+        "¿Hacer zoom en un módulo? (o ver todos):",
+        choices=choices,
         style=_STYLE,
         use_shortcuts=False,
         instruction="(↑↓  ↵ elegir  Esc cancelar)",
     ).ask()
 
-    if sel is None or sel == BACK:
+    if answer is None or answer == BACK:
         return BACK
-    if sel == _NONE:
+    if answer == _ALL:
         return None
-
-    return ask_module(modules, "Módulo focal (muestra solo él y sus dependencias)")
+    return answer
 
 
 # ── Pedir formatos de export ──────────────────────────────────────────────────

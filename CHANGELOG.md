@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-05-24
+
+### Fixed
+- Menú: al cancelar la selección de módulo focal ya no procede el análisis — vuelve correctamente al menú principal
+- Menú: selector de módulo focal muestra los nombres directamente en la lista (sin paso intermedio)
+
 ## [1.0.2] - 2026-05-24
 
 ### Added
