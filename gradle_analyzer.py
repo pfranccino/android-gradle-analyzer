@@ -38,7 +38,7 @@ _DOT_COLORS = {
 
 class GradleDependencyAnalyzer:
     def __init__(self, base_path, config_path=None, exclude=None, verbose=True):
-        self.base_path    = Path(base_path)
+        self.base_path    = Path(base_path).resolve()
         self.config       = load_config(config_path)
         self.exclude      = set(exclude or [])
         self.modules      = []
@@ -194,7 +194,7 @@ class GradleDependencyAnalyzer:
             test_deps    = self._test_deps(from_module) & module_set
 
             for to_module in sorted(compile_deps):
-                lines.append(f"  {from_id} --> {to_module.replace('-','_').replace(':','_')} : use")
+                lines.append(f"  {from_id} --> {to_module.replace('-','_').replace(':','_')} : uses")
             for to_module in sorted(build_deps - compile_deps):
                 lines.append(f"  {from_id} ..> {to_module.replace('-','_').replace(':','_')} : build")
             for to_module in sorted(test_deps - compile_deps - build_deps):
@@ -231,7 +231,7 @@ class GradleDependencyAnalyzer:
             test_deps    = self._test_deps(from_module) & module_set
 
             for to_module in sorted(compile_deps):
-                lines.append(f"    {from_id} -->|use| {to_module.replace('-','_').replace(':','_')}")
+                lines.append(f"    {from_id} -->|uses| {to_module.replace('-','_').replace(':','_')}")
             for to_module in sorted(build_deps - compile_deps):
                 lines.append(f"    {from_id} -.->|build| {to_module.replace('-','_').replace(':','_')}")
             for to_module in sorted(test_deps - compile_deps - build_deps):
