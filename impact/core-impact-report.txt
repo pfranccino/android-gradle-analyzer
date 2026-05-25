@@ -1,0 +1,13 @@
+======================================================================
+IMPACTO DE CAMBIOS EN: CORE
+======================================================================
+
+Proyecto      : tests\fixtures\simple
+Módulo        : core
+Total módulos : 2
+
+  Nivel 1 — dependientes directos (1):
+    • app
+
+  🔥 Impacto total: 1 módulos (50% del proyecto)
+     Cambiar core requiere verificar 1 módulo(s).

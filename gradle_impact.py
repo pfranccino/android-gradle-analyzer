@@ -12,6 +12,7 @@ from analyzer_utils import (
     get_icon,
     normalize_module_name,
     find_gradle_file,
+    setup_utf8,
 )
 
 
@@ -220,6 +221,7 @@ class ImpactAnalyzer:
 
 
 def main():
+    setup_utf8()
     parser = argparse.ArgumentParser(
         description="Calcula el impacto transitivo de cambios en un módulo Android"
     )

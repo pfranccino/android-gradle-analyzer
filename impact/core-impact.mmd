@@ -1,0 +1,13 @@
+graph LR
+
+  core["🎯 core"]
+  app["📦 app"]
+
+  app -->|uses| core
+
+  classDef target  fill:#FFCDD2,stroke:#C62828,stroke-width:2px
+  classDef level1  fill:#FFE0B2,stroke:#E65100,stroke-width:2px
+  classDef level2  fill:#FFF9C4,stroke:#F57F17,stroke-width:2px
+
+  class core target
+  class app level1

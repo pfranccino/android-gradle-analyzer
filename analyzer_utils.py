@@ -4,9 +4,21 @@ Utilidades compartidas para el Android Gradle Dependency Analyzer.
 """
 
 import re
+import sys
 import json
 from pathlib import Path
 from collections import defaultdict
+
+
+def setup_utf8() -> None:
+    if sys.platform == "win32":
+        import os
+        os.environ.setdefault("PYTHONUTF8", "1")
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+            sys.stderr.reconfigure(encoding="utf-8")
+        except AttributeError:
+            pass
 
 
 # ─── Detección de módulos ──────────────────────────────────────────────────

@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-05-24
+
+### Fixed
+- UnicodeEncodeError en Windows: todos los CLIs ahora fuerzan UTF-8 en stdout/stderr al arrancar (fix para terminales con encoding cp1252)
+
 ## [1.0.3] - 2026-05-24
 
 ### Fixed

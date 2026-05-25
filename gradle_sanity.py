@@ -458,6 +458,8 @@ class GradleSanityAnalyzer:
 
 def main():
     import sys
+    from analyzer_utils import setup_utf8
+    setup_utf8()
 
     parser = argparse.ArgumentParser(
         description='Mide la sanidad arquitectónica de las dependencias Gradle de un módulo Android'

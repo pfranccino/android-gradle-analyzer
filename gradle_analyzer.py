@@ -15,6 +15,7 @@ from analyzer_utils import (
     detect_cycles,
     find_gradle_file,
     normalize_module_name,
+    setup_utf8,
 )
 
 _COMPILE_SCOPES = {'api', 'implementation', 'compileOnly'}
@@ -476,6 +477,7 @@ def _build_analyzer(args):
 
 
 def main():
+    setup_utf8()
     parser = argparse.ArgumentParser(
         description='Analiza dependencias internas de módulos Android'
     )

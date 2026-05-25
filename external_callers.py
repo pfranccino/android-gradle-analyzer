@@ -14,6 +14,7 @@ from analyzer_utils import (
     normalize_module_name,
     is_submodule_of,
     find_gradle_file,
+    setup_utf8,
 )
 
 
@@ -262,6 +263,7 @@ class ExternalCallersAnalyzer:
 
 
 def main():
+    setup_utf8()
     parser = argparse.ArgumentParser(
         description='Detecta qué módulos externos llaman a tu módulo Android'
     )

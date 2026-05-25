@@ -1,0 +1,20 @@
+@startuml
+
+skinparam packageStyle rectangle
+skinparam linetype ortho
+skinparam backgroundColor white
+skinparam classBackgroundColor<<target>>  #FFCDD2
+skinparam classBackgroundColor<<level1>>  #FFE0B2
+skinparam classBackgroundColor<<level2>>  #FFF9C4
+skinparam classBorderColor #757575
+
+skinparam nodesep 100
+skinparam ranksep 100
+skinparam padding 20
+
+class "core" as core <<target>>
+class "app" as app <<level1>>
+
+app --> core : uses
+
+@enduml
