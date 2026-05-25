@@ -52,6 +52,7 @@ class GradleSanityAnalyzer:
         self.api_issues      = []   # [(module, {api_deps}), ...]
         self.fan_out_issues  = []   # [(module, ce), ...]
         self.version_issues  = []   # [(module, [version_strings]), ...]
+        self.orphan_modules  = []   # [module, ...]
 
     # ── Análisis ─────────────────────────────────────────────────────────────
 
@@ -93,6 +94,11 @@ class GradleSanityAnalyzer:
             self.instability[module] = self.ce[module] / total if total > 0 else 0.0
 
         self.cycles = self._dep.detect_dependency_cycles()
+
+        self.orphan_modules = [
+            m for m in self._dep.modules
+            if self.ca.get(m, 0) == 0 and self.ce.get(m, 0) == 0
+        ]
 
     def _detect_sdp_violations(self):
         """
@@ -154,7 +160,11 @@ class GradleSanityAnalyzer:
             if gradle_file.exists():
                 try:
                     content = gradle_file.read_text(encoding='utf-8')
-                    matches = _HARDCODED_VERSION_RE.findall(content)
+                    active = "\n".join(
+                        l for l in content.splitlines()
+                        if not l.strip().startswith(('//', '*', '/*'))
+                    )
+                    matches = _HARDCODED_VERSION_RE.findall(active)
                     if matches:
                         self.version_issues.append((module, matches))
                 except Exception as e:
@@ -349,6 +359,19 @@ class GradleSanityAnalyzer:
                     lines.append(f"     └─ {v}")
         else:
             lines.append("   Sin versiones hardcodeadas ✅")
+        lines.append("")
+
+        lines.append(f"ℹ️  MÓDULOS HUÉRFANOS ({len(self.orphan_modules)})  —  sin penalización")
+        lines.append(
+            "   Módulos sin dependencias entrantes (Ca=0) ni salientes (Ce=0).\n"
+            "   Pueden ser features en desarrollo o candidatos a eliminar.\n"
+            "   No se penalizan en el score — requieren revisión manual."
+        )
+        if self.orphan_modules:
+            for module in sorted(self.orphan_modules):
+                lines.append(f"   ℹ️  {module}")
+        else:
+            lines.append("   Sin módulos huérfanos ✅")
         lines.append("")
 
         # ── Score ─────────────────────────────────────────────────────────────

@@ -253,6 +253,31 @@ def _action_sanity(last_result, deps):
         return last_result
 
 
+def _action_impact(last_result, deps):
+    (console, _, _, _, set_last_project, set_last_module, add_history_entry, _,
+     prompts, actions, ui, to_html, to_pdf, to_markdown, to_zip, PDF_AVAILABLE,
+     open_plantuml_online, render_plantuml_local, list_modules) = deps
+
+    path, modules = _get_project_and_modules(prompts, list_modules)
+    if not path:
+        return last_result
+    module = prompts.ask_module(modules, "Módulo a analizar (qué pasa si cambia)")
+    if not module:
+        return last_result
+    fmt = prompts.ask_format()
+    if not fmt:
+        return last_result
+    with ui.analysis_spinner(f"Calculando impacto de '{module}'..."):
+        result = actions.run_impact(project=path, module=module, fmt=fmt,
+                                    output_dir="impact")
+    ctx = _post_analysis(result, "impact", path, module,
+                         ui, prompts, console, add_history_entry,
+                         set_last_project, set_last_module,
+                         open_plantuml_online, render_plantuml_local,
+                         to_html, to_pdf, to_markdown, to_zip, PDF_AVAILABLE)
+    return ctx or last_result
+
+
 def _action_history(deps):
     (console, _, _, _, _, _, _, get_history,
      prompts, _, ui, *_) = deps
@@ -283,6 +308,10 @@ def _quick_mode(action: str, path: str, actions, console) -> None:
         result = actions.run_external(project=path, module=module)
     elif action == "sanity":
         result = actions.run_sanity(path=path)
+    elif action.startswith("impact "):
+        parts  = shlex.split(action)
+        module = parts[1] if len(parts) > 1 else ""
+        result = actions.run_impact(project=path, module=module)
     else:
         console.print(f"[red]Acción desconocida: {action}[/red]")
         sys.exit(1)
@@ -350,6 +379,8 @@ def main() -> None:
             last_result = _action_external(last_result, deps)
         elif choice == "sanity":
             last_result = _action_sanity(last_result, deps)
+        elif choice == "impact":
+            last_result = _action_impact(last_result, deps)
         elif choice == "export":
             _handle_export(last_result or None, prompts, ui, console,
                            to_html, to_pdf, to_markdown, to_zip, PDF_AVAILABLE)

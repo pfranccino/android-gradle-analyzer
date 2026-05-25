@@ -35,6 +35,7 @@ MENU_CHOICES = [
     questionary.Choice("📦  Dependencias internas",         value="internal"),
     questionary.Choice("🔗  Llamadas externas al módulo",   value="external"),
     questionary.Choice("📊  Sanidad de dependencias",       value="sanity"),
+    questionary.Choice("💥  Impacto de cambios en módulo",  value="impact"),
     questionary.Separator(),
     questionary.Choice("📤  Exportar último análisis",       value="export"),
     questionary.Choice("📋  Ver historial",                  value="history"),

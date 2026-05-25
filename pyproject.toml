@@ -28,6 +28,7 @@ gradle-analyzer      = "gradle_analyzer:main"
 gradle-externals     = "external_callers:main"
 gradle-sanity        = "gradle_sanity:main"
 gradle-analyzer-menu = "menu:main"
+gradle-impact        = "gradle_impact:main"
 
 [project.urls]
 Homepage = "https://github.com/pfranccino/android-gradle-analyzer"
@@ -50,6 +51,7 @@ include = [
   "gradle_analyzer.py",
   "external_callers.py",
   "gradle_sanity.py",
+  "gradle_impact.py",
   "menu.py",
   "analyzer_config.example.json",
 ]

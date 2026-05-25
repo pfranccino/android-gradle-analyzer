@@ -116,6 +116,43 @@ def run_external(
         return {"ok": False, "outputs": [], "summary": str(exc), "callers": {}, "log": ""}
 
 
+def run_impact(
+    project: str,
+    module: str,
+    fmt: str = "all",
+    output_dir: str = "impact",
+    config: str | None = None,
+) -> dict:
+    from gradle_impact import ImpactAnalyzer
+
+    try:
+        analyzer = ImpactAnalyzer(
+            project_root=project,
+            target_module=module,
+            config_path=config,
+        )
+
+        def _run():
+            analyzer.scan_and_build_graph()
+            analyzer.compute_impact()
+            analyzer.save_all(output_dir=output_dir, fmt=fmt)
+
+        _, log = _capture(_run)
+
+        output_path = Path(output_dir)
+        outputs = [str(f) for f in output_path.iterdir() if f.is_file()] if output_path.exists() else []
+
+        return {
+            "ok":      True,
+            "outputs": outputs,
+            "summary": analyzer.generate_report(),
+            "impacted": dict(analyzer.impacted),
+            "log":     log,
+        }
+    except Exception as exc:
+        return {"ok": False, "outputs": [], "summary": str(exc), "impacted": {}, "log": ""}
+
+
 def run_sanity(
     path: str,
     output_dir: str = "sanity",
