@@ -48,11 +48,12 @@ def main():
     _replace(PYPROJECT, r'(?m)^(version\s*=\s*)"[^"]+"', f'\\1"{new}"')
     _replace(BRANDING,  r'(?m)^(VERSION\s*=\s*)"[^"]+"', f'\\1"{new}"')
 
-    print(f"\nCambios aplicados. Ejecutá:")
-    print(f"  git add pyproject.toml menu/branding.py CHANGELOG.md")
-    print(f"  git commit -m \"chore: bump version to v{new}\"")
-    print(f"  git tag v{new}")
-    print(f"  git push && git push --tags")
+    print(f"\nCambios aplicados. Próximos pasos:")
+    print(f"  1. Editá CHANGELOG.md con la sección ## [{new}]")
+    print(f"  2. git add pyproject.toml menu/branding.py CHANGELOG.md")
+    print(f'  3. git commit -m "chore: bump version to v{new}"')
+    print(f"  4. git push")
+    print(f"\nCI creará el tag v{new} y el release automáticamente si los tests pasan.")
 
 
 if __name__ == "__main__":
