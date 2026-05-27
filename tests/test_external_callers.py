@@ -55,3 +55,40 @@ class TestExternalCallersAnalyzer:
         scanned.analyze_external_calls()
 
         assert "payments-extra" not in scanned.external_callers
+
+
+class TestExternalCallersAmbiguousLeaf:
+    """
+    Cubre el bug del endswith: un módulo raíz :common que coexiste con
+    un submódulo :target:common confunde al matcher heurístico anterior.
+    """
+
+    @pytest.fixture
+    def analyzer(self):
+        a = ExternalCallersAnalyzer(
+            project_root=str(FIXTURES / "external_ambiguous"),
+            target_module="target",
+        )
+        a.scan_all_modules()
+        a.analyze_external_calls()
+        return a
+
+    def test_root_common_not_a_caller_of_target_common(self, analyzer):
+        """
+        caller declara project(':common') (raíz) y project(':target:common').
+        SOLO la segunda debe contar como llamada externa.
+        """
+        callers = analyzer.external_callers.get("caller", {})
+        assert "target:common" in callers
+        # El bug previo agregaba target:common doble vía endswith desde :common.
+        # Verificamos que el scope tenga exactamente el match correcto.
+        assert callers["target:common"] == {"implementation"}
+
+    def test_accessor_caller_detected(self, analyzer):
+        """caller-using-accessor usa projects.target.common — debe verse igual."""
+        callers = analyzer.external_callers.get("caller-using-accessor", {})
+        assert "target:common" in callers
+
+    def test_common_root_is_external_not_internal(self, analyzer):
+        """:common (raíz) no es submódulo de target — debe ser externo."""
+        assert "common" not in analyzer.internal_modules

@@ -5,6 +5,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-05-26
+
+### Added
+- Soporte para **type-safe project accessors** (`projects.foo.barBaz`, Gradle 7+) en los 4 analizadores. El parser construye un mapa accessor → módulo a partir de `settings.gradle(.kts)` y resuelve referencias en Kotlin DSL (`implementation(projects.feature.paymentsCommon)`) y Groovy (`implementation projects.feature.paymentsCommon`). Análisis 100% estático, sin compilar
+- `module_to_accessor()` y `build_accessor_map()` expuestos en `analyzer_utils` para uso externo o testing
+- Detección de colisiones de accessor (raro en proyectos reales): si dos módulos mapean al mismo accessor, se emite un warning y gana el primero
+
+### Fixed
+- **Falsos positivos en `external_callers` y `gradle_analyzer`**: el matcher anterior usaba `endswith(':' + path)` bidireccional, lo que hacía que `project(":common")` matchera erróneamente cualquier submódulo `:foo:common`. Ahora el matcheo es exacto sobre el listado de módulos conocidos. Caso real afectado: cualquier proyecto con módulos raíz que comparten leaf-name con submódulos del target
+
 ## [1.1.1] - 2026-05-26
 
 ### Fixed

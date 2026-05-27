@@ -95,6 +95,22 @@ class TestGradleDependencyAnalyzer:
         assert "core" in focused
         assert "app" not in focused
 
+    def test_resolves_type_safe_accessors_end_to_end(self):
+        """
+        Integración: el analizador completo sobre un proyecto con type-safe
+        accessors (projects.foo.barBaz) debe resolver las dependencias igual
+        que con el formato clásico project(":foo:bar").
+        """
+        analyzer = GradleDependencyAnalyzer(base_path=str(FIXTURES / "accessors"))
+        analyzer.scan_modules()
+        analyzer.analyze_gradle_dependencies()
+
+        app_deps = analyzer.dependencies.get("app", {})
+        assert "feature:payments-common" in app_deps.get("implementation", set())
+        assert "core:network_api"        in app_deps.get("api", set())
+        # Mezcla con sintaxis clásica en el mismo archivo
+        assert "legacy:plain-lib"        in app_deps.get("implementation", set())
+
 
 class TestFindGradleFile:
 

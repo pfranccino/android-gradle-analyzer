@@ -121,22 +121,80 @@ def _build_patterns(scope: str) -> list:
     ]
 
 
-DEPENDENCY_SCOPES = {
-    scope: _build_patterns(scope)
-    for scope in [
-        'implementation',
-        'api',
-        'testImplementation',
-        'androidTestImplementation',
-        'kapt',
-        'compileOnly',
-        'runtimeOnly',
-        'debugImplementation',
-        'releaseImplementation',
-        'annotationProcessor',
-        'testRuntimeOnly',
+_SCOPE_NAMES = [
+    'implementation',
+    'api',
+    'testImplementation',
+    'androidTestImplementation',
+    'kapt',
+    'compileOnly',
+    'runtimeOnly',
+    'debugImplementation',
+    'releaseImplementation',
+    'annotationProcessor',
+    'testRuntimeOnly',
+]
+
+DEPENDENCY_SCOPES = {scope: _build_patterns(scope) for scope in _SCOPE_NAMES}
+
+
+# ─── Type-safe project accessors (projects.foo.barBaz) ────────────────────
+
+def _build_accessor_patterns(scope: str) -> list:
+    """Patrones para `scope(projects.foo.barBaz)` (Kotlin DSL) y la variante
+    Groovy sin parens. El accessor es dot-separated camelCase, sin comillas."""
+    return [
+        rf'{scope}\s*\(\s*projects\.([\w.]+)\s*\)',
+        rf'{scope}\s+projects\.([\w.]+)',
     ]
-}
+
+
+ACCESSOR_SCOPES = {scope: _build_accessor_patterns(scope) for scope in _SCOPE_NAMES}
+
+
+def _segment_to_camel(seg: str) -> str:
+    """Convierte un segmento estilo kebab/snake/dot a camelCase.
+    Sigue la regla de Gradle: separadores '-', '_' y '.' se eliminan
+    y la letra siguiente se capitaliza. Caracteres no-separadores
+    conservan su casing original.
+    """
+    parts = re.split(r'[-_.]', seg)
+    if not parts:
+        return seg
+    out = parts[0]
+    for p in parts[1:]:
+        if p:
+            out += p[0].upper() + p[1:]
+    return out
+
+
+def module_to_accessor(module: str) -> str:
+    """Mapea un nombre de módulo Gradle a su accessor sin el prefijo 'projects.'.
+
+    Ejemplos:
+        ':foo:bar-baz' -> 'foo.barBaz'
+        ':app'         -> 'app'
+        'core:network' -> 'core.network'
+    """
+    segments = [s for s in module.lstrip(':').split(':') if s]
+    return '.'.join(_segment_to_camel(s) for s in segments)
+
+
+def build_accessor_map(known_modules) -> dict:
+    """Construye accessor -> nombre de módulo a partir del listado completo.
+    Detecta colisiones (dos módulos con el mismo accessor) y emite warning.
+    En Gradle real una colisión no debería poder ocurrir."""
+    accessor_map: dict = {}
+    for m in known_modules:
+        acc = module_to_accessor(m)
+        if not acc:
+            continue
+        existing = accessor_map.get(acc)
+        if existing is not None and existing != m:
+            print(f"  ⚠️  Accessor '{acc}' colisiona: '{existing}' vs '{m}' — se ignora '{m}'")
+            continue
+        accessor_map[acc] = m
+    return accessor_map
 
 
 # ─── Parsing de Gradle ─────────────────────────────────────────────────────
@@ -144,6 +202,13 @@ DEPENDENCY_SCOPES = {
 def parse_gradle_file_scoped(gradle_file, known_modules, self_module):
     """
     Parsea un archivo gradle y devuelve dependencias agrupadas por scope.
+
+    Soporta dos sintaxis:
+      1. project(":foo:bar")            — formato clásico (Groovy y Kotlin DSL)
+      2. projects.foo.barBaz            — type-safe project accessor (Gradle 7+)
+
+    El matcheo contra `known_modules` es EXACTO (sin endswith heurísticos):
+    `project(":common")` solo matchea el módulo `common`, nunca `payments:common`.
 
     Args:
         gradle_file: Path al archivo build.gradle / build.gradle.kts
@@ -154,31 +219,30 @@ def parse_gradle_file_scoped(gradle_file, known_modules, self_module):
         dict[str, set[str]]: {scope: {modulos_dependidos}}
     """
     result = defaultdict(set)
+    known_set    = {normalize_module_name(m.lstrip(':')) for m in known_modules}
+    accessor_map = build_accessor_map(known_modules)
 
     try:
         with open(gradle_file, 'r', encoding='utf-8') as f:
             content = f.read()
 
+        # ── Patrón clásico: project(":foo:bar")
         for scope, patterns in DEPENDENCY_SCOPES.items():
             for pattern in patterns:
                 for match in re.finditer(pattern, content):
-                    project_path = match.group(1)
+                    project_path = match.group(1).lstrip(':')
+                    normalized   = normalize_module_name(project_path)
+                    if normalized in known_set and normalized != self_module:
+                        result[scope].add(normalized)
 
-                    # Quitar el primer ":" si existe
-                    if project_path.startswith(':'):
-                        project_path = project_path[1:]
-
-                    normalized_path = normalize_module_name(project_path)
-                    for known_module in known_modules:
-                        normalized_module = normalize_module_name(known_module)
-                        if (
-                            normalized_path == normalized_module or
-                            normalized_module.endswith(':' + normalized_path) or
-                            normalized_path.endswith(':' + normalized_module)
-                        ):
-                            if known_module != self_module:
-                                result[scope].add(known_module)
-                            break
+        # ── Type-safe accessors: projects.foo.barBaz
+        for scope, patterns in ACCESSOR_SCOPES.items():
+            for pattern in patterns:
+                for match in re.finditer(pattern, content):
+                    accessor = match.group(1)
+                    module   = accessor_map.get(accessor)
+                    if module and module != self_module:
+                        result[scope].add(module)
 
     except Exception as e:
         print(f"  ⚠️  Error leyendo {gradle_file.name}: {e}")
