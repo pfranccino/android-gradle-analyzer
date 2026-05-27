@@ -1,9 +1,9 @@
 [project]
 name = "android-gradle-analyzer"
-version = "1.2.0"
+version = "1.2.1"
 description = "Analiza dependencias y mide la sanidad de proyectos Android multi-módulo."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 license = { file = "LICENSE" }
 authors = [{ name = "pfranccino", email = "paul.ayala023@gmail.com" }]
 keywords = ["android", "gradle", "dependencies", "plantuml", "mermaid", "architecture"]

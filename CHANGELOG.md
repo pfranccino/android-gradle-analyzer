@@ -5,6 +5,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-05-26
+
+### Changed
+- `pyproject.toml`: `requires-python` actualizado de `>=3.8` a `>=3.10`. El código usa sintaxis PEP 604 (`str | None`, `list[str]`) que requiere Python 3.10 o superior. Antes el paquete se instalaba en 3.8/3.9 pero crashaba al primer import — ahora pip se niega antes con un mensaje claro
+- README: badge de Python actualizado a `3.10+` (antes mentía con `3.7+`)
+
+### Added
+- README: badges de **Tests** (estado del último workflow) y **Release** (última versión publicada) vía shields.io
+
 ## [1.2.0] - 2026-05-26
 
 ### Added

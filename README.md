@@ -4,7 +4,9 @@
 
 Herramientas para **analizar, visualizar y medir la salud** de las dependencias entre módulos en proyectos Android multi-módulo.
 
-[![Python](https://img.shields.io/badge/python-3.7+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/python-3.10+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Tests](https://img.shields.io/github/actions/workflow/status/pfranccino/android-gradle-analyzer/release.yml?branch=main&label=tests)](https://github.com/pfranccino/android-gradle-analyzer/actions/workflows/release.yml)
+[![Release](https://img.shields.io/github/v/release/pfranccino/android-gradle-analyzer?label=release)](https://github.com/pfranccino/android-gradle-analyzer/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![PlantUML](https://img.shields.io/badge/diagrams-PlantUML%20%C2%B7%20Mermaid-orange)](https://plantuml.com)
 
