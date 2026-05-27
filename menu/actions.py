@@ -31,6 +31,7 @@ def run_internal(
     output_dir: str = "diagrams",
     config: str | None = None,
     focus: str | None = None,
+    on_progress=None,
 ) -> dict:
     """
     Analiza dependencias internas de un módulo Android.
@@ -51,7 +52,7 @@ def run_internal(
 
         def _run():
             analyzer.scan_modules()
-            analyzer.analyze_gradle_dependencies()
+            analyzer.analyze_gradle_dependencies(on_progress=on_progress)
             analyzer.save_all(output_dir=output_dir, fmt=fmt, focus=focus_list)
 
         _, log = _capture(_run)

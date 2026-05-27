@@ -4,11 +4,12 @@ import json
 import argparse
 from pathlib import Path
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from analyzer_utils import (
     parse_gradle_file_scoped,
     parse_settings_modules,
+    find_project_root,
     load_config,
     load_project_config,
     get_icon,
@@ -38,13 +39,14 @@ _DOT_COLORS = {
 
 class GradleDependencyAnalyzer:
     def __init__(self, base_path, config_path=None, exclude=None, verbose=True):
-        self.base_path    = Path(base_path).resolve()
-        self.config       = load_config(config_path)
-        self.exclude      = set(exclude or [])
-        self.modules      = []
-        self.dependencies = defaultdict(lambda: defaultdict(set))
-        self.module_paths = {}
-        self._vprint      = print if verbose else (lambda *a, **k: None)
+        self.base_path     = Path(base_path).resolve()
+        self.config        = load_config(config_path)
+        self.exclude       = set(exclude or [])
+        self.modules       = []
+        self.known_modules = []
+        self.dependencies  = defaultdict(lambda: defaultdict(set))
+        self.module_paths  = {}
+        self._vprint       = print if verbose else (lambda *a, **k: None)
 
     def scan_modules(self):
         self._vprint(f"📁 Escaneando módulos en: {self.base_path}\n")
@@ -80,13 +82,30 @@ class GradleDependencyAnalyzer:
                 except ValueError:
                     continue
 
+        # Detectar raíz del proyecto para construir el registry completo de módulos.
+        # Permite resolver dependencias a módulos fuera del base_path analizado.
+        root = find_project_root(self.base_path)
+        if root != self.base_path:
+            root_modules = parse_settings_modules(root)
+            if root_modules:
+                self.known_modules = root_modules
+                self._vprint(
+                    f"\n📡 Raíz detectada: {root}"
+                    f" ({len(self.known_modules)} módulos conocidos,"
+                    f" {len(self.modules)} a analizar)"
+                )
+            else:
+                self.known_modules = list(self.modules)
+        else:
+            self.known_modules = list(self.modules)
+
         self._vprint(f"\n✓ {len(self.modules)} módulos encontrados\n")
         return self
 
-    def analyze_gradle_dependencies(self):
+    def analyze_gradle_dependencies(self, on_progress=None):
         self._vprint("🔍 Analizando archivos Gradle...")
 
-        modules   = self.modules
+        known     = self.known_modules
         base_path = self.base_path
 
         def _parse_one(module):
@@ -94,16 +113,24 @@ class GradleDependencyAnalyzer:
             gradle_file = find_gradle_file(module_path)
             if gradle_file is None:
                 return module, None
-            return module, parse_gradle_file_scoped(gradle_file, modules, module)
+            return module, parse_gradle_file_scoped(gradle_file, known, module)
+
+        total = len(self.modules)
+        done  = 0
 
         with ThreadPoolExecutor() as executor:
-            for module, scoped in executor.map(_parse_one, modules):
+            futures = {executor.submit(_parse_one, m): m for m in self.modules}
+            for future in as_completed(futures):
+                module, scoped = future.result()
+                done += 1
+                if on_progress:
+                    on_progress(done, total)
                 if scoped is None:
                     self._vprint(f"  ⚠️  No se encontró gradle para: {module}")
                 elif scoped:
                     self.dependencies[module] = scoped
-                    total = sum(len(v) for v in scoped.values())
-                    self._vprint(f"  ✓ {module}: {total} dependencia(s)")
+                    n = sum(len(v) for v in scoped.values())
+                    self._vprint(f"  ✓ {module}: {n} dependencia(s)")
                 else:
                     self._vprint(f"  ○ {module}: sin dependencias internas")
 

@@ -5,6 +5,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-05-26
+
+### Added
+- Auto-detección de raíz del proyecto: `find_project_root()` sube directorios desde el path analizado hasta encontrar `settings.gradle(.kts)`, permitiendo resolver dependencias `implementation(project(":..."))` a módulos fuera del subdirectorio analizado (ej. analizar `customer/` y ver dependencias a `view`, `mach-foundation:util`, etc.)
+- `known_modules` separado de `modules` en `GradleDependencyAnalyzer`: el registry completo del proyecto raíz se usa para el matching de dependencias, mientras `modules` sigue controlando qué módulos se analizan
+- Barra de progreso con porcentaje en el menú interactivo para proyectos con más de 10 módulos (`BarColumn` + `MofNCompleteColumn`); proyectos pequeños mantienen el spinner simple
+- `analyze_gradle_dependencies` acepta callback `on_progress(done, total)` para actualizar la UI; usa `as_completed` para progreso fluido conforme terminan los workers paralelos
+
 ## [1.0.9] - 2026-05-25
 
 ### Fixed

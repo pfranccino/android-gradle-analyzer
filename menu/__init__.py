@@ -237,11 +237,15 @@ def _action_internal(last_result, deps):
         return last_result
     focus = focus_answer
 
-    spinner_msg = (
+    progress_label = (
         f"Analizando '{focus}'..." if focus else "Analizando dependencias internas..."
     )
-    with ui.analysis_spinner(spinner_msg):
-        result = actions.run_internal(path=path, fmt=fmt, output_dir="diagrams", focus=focus)
+    n_modules = len(modules) if modules else 0
+    with ui.analysis_progress(progress_label, n_modules) as on_progress:
+        result = actions.run_internal(
+            path=path, fmt=fmt, output_dir="diagrams",
+            focus=focus, on_progress=on_progress,
+        )
 
     ctx = _post_analysis(result, "internal", path, focus,
                          ui, prompts, console, add_history_entry,

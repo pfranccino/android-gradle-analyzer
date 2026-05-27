@@ -9,7 +9,10 @@ from rich.layout import Layout
 from rich.text import Text
 from rich.align import Align
 from rich import box
-from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
+from rich.progress import (
+    Progress, SpinnerColumn, TextColumn, TimeElapsedColumn,
+    BarColumn, MofNCompleteColumn,
+)
 from contextlib import contextmanager
 
 from menu.branding import AUTHOR, AUTHOR_URL, VERSION, TOOL_NAME, HEADER_CREDIT
@@ -58,6 +61,38 @@ def analysis_spinner(label: str):
     ) as progress:
         progress.add_task(f"[cyan]{label}[/cyan]")
         yield progress
+
+
+@contextmanager
+def analysis_progress(label: str, total: int):
+    """Context manager con barra de progreso para proyectos grandes (total > 10).
+    Devuelve un callback on_progress(done, total) para actualizar la barra.
+    Para proyectos pequeños usa un spinner simple sin callback.
+    """
+    if total <= 10:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            TimeElapsedColumn(),
+            console=console,
+            transient=True,
+        ) as progress:
+            progress.add_task(f"[cyan]{label}[/cyan]")
+            yield lambda done, _total: None
+        return
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TextColumn("[cyan]{task.percentage:>3.0f}%[/cyan]"),
+        TimeElapsedColumn(),
+        console=console,
+        transient=True,
+    ) as progress:
+        task = progress.add_task(f"[cyan]{label}[/cyan]", total=total)
+        yield lambda done, _total: progress.update(task, completed=done)
 
 
 # ── Tabla de módulos con métricas ─────────────────────────────────────────────

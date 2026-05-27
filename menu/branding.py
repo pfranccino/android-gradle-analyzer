@@ -5,7 +5,7 @@ Uso discreto: header, exit line, footer de exports.
 
 AUTHOR      = "pfranccino"
 AUTHOR_URL  = "https://pfranccino.dev"
-VERSION     = "1.0.9"
+VERSION     = "1.1.0"
 TOOL_NAME   = "android-gradle-analyzer"
 
 # Textos reutilizables

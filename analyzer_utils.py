@@ -51,6 +51,19 @@ def parse_settings_modules(base_path) -> list | None:
     return None
 
 
+def find_project_root(start_path) -> Path:
+    """Sube directorios desde start_path hasta encontrar settings.gradle(.kts).
+    Devuelve el directorio que lo contiene, o start_path como fallback.
+    """
+    current = Path(start_path).resolve()
+    while current != current.parent:
+        for name in ("settings.gradle.kts", "settings.gradle"):
+            if (current / name).exists():
+                return current
+        current = current.parent
+    return Path(start_path).resolve()
+
+
 def list_modules(base_path) -> list:
     base = Path(base_path)
 
