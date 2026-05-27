@@ -13,6 +13,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Barra de progreso con porcentaje en el menú interactivo para proyectos con más de 10 módulos (`BarColumn` + `MofNCompleteColumn`); proyectos pequeños mantienen el spinner simple
 - `analyze_gradle_dependencies` acepta callback `on_progress(done, total)` para actualizar la UI; usa `as_completed` para progreso fluido conforme terminan los workers paralelos
 
+### Fixed
+- `generate_ascii`: usaba `module_set` (solo los módulos del scope analizado) como filtro de dependencias, mostrando "(sin dependencias internas)" cuando las deps apuntan a módulos del proyecto raíz fuera del subdirectorio. Ahora usa `known_modules`
+- `generate_report`: la sección "Módulos no utilizados por otros" se ocultaba cuando se analiza un subconjunto del proyecto (el Ca no puede calcularse sin analizar todos los módulos). En su lugar muestra una nota que apunta a "Llamadas externas"
+
 ## [1.0.9] - 2026-05-25
 
 ### Fixed

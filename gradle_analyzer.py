@@ -357,10 +357,10 @@ class GradleDependencyAnalyzer:
         return "\n".join(lines)
 
     def generate_ascii(self, focus=None):
-        modules    = self._focused_modules(focus) if focus else self.modules
-        module_set = set(modules)
-        name       = self.base_path.name
-        width      = 70
+        modules   = self._focused_modules(focus) if focus else self.modules
+        known_set = set(self.known_modules) if self.known_modules else set(modules)
+        name      = self.base_path.name
+        width     = 70
 
         lines = [
             "━" * width,
@@ -375,7 +375,7 @@ class GradleDependencyAnalyzer:
                 (dep, scope)
                 for scope, deps in sorted(scoped.items())
                 for dep in sorted(deps)
-                if dep in module_set
+                if dep in known_set
             ]
 
             icon = get_icon(module, self.config)
@@ -452,11 +452,18 @@ class GradleDependencyAnalyzer:
             for module in sorted(no_deps):
                 lines.append(f"  • {module}")
 
+        is_subset = bool(self.known_modules) and set(self.known_modules) != set(self.modules)
         unused = [m for m in self.modules if m not in usage_count]
         if unused:
-            lines.append(f"\nMódulos no utilizados por otros ({len(unused)}):")
-            for module in sorted(unused):
-                lines.append(f"  • {module}")
+            if is_subset:
+                lines.append(
+                    f"\nℹ️  No se detectaron dependencias entrantes en el scope analizado ({len(unused)} módulo(s))."
+                    "\n   Para ver qué módulos del proyecto dependen de estos, usá \"Llamadas externas\"."
+                )
+            else:
+                lines.append(f"\nMódulos no utilizados por otros ({len(unused)}):")
+                for module in sorted(unused):
+                    lines.append(f"  • {module}")
 
         return "\n".join(lines)
 
