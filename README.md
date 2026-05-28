@@ -22,9 +22,11 @@ Herramientas para **analizar, visualizar y medir la salud** de las dependencias 
 # Recomendado · instalación global con pipx (última versión)
 pipx install git+https://github.com/pfranccino/android-gradle-analyzer.git
 
+# Con parser AST para .gradle.kts (maneja multilínea y comentarios correctamente)
+pipx install "android-gradle-analyzer[kts]"
+
 # Versión específica
 pipx install git+https://github.com/pfranccino/android-gradle-analyzer.git@v1.0.0
-pipx install git+https://github.com/pfranccino/android-gradle-analyzer.git@v0.1.0
 
 # Ver versión instalada
 gradle-analyzer-menu --version
@@ -32,7 +34,7 @@ gradle-analyzer-menu --version
 # 1 · Dependencias internas de un módulo
 gradle-analyzer /ruta/a/tu/proyecto/payments
 
-# También podés usar . si ya estás parado en el módulo
+# También puedes usar . si ya estás en el módulo
 cd /ruta/a/tu/proyecto/payments
 gradle-analyzer .
 
@@ -124,6 +126,8 @@ Dado un módulo, muestra qué otros módulos se romperían si cambia (BFS sobre 
 
 - ✅ **Detección recursiva** sin importar la profundidad de los módulos
 - 📋 **`settings.gradle.kts` / `settings.gradle`** — si existe, se usa como fuente de verdad para los módulos
+- 🎯 **Type-safe project accessors** (`projects.foo.barBaz`, Gradle 7+) soportados junto al formato clásico `project(":foo:bar")`
+- 🌳 **Parser AST para `.kts`** (opcional) — usa tree-sitter-kotlin para manejar dependencias multilínea y comentados correctamente
 - 🎨 **Colores por tipo** (common, gateway, features)
 - ⚠️ **Detección automática de ciclos**
 - 🔭 **Scopes soportados:** `implementation`, `api`, `kapt`, `compileOnly`, `testImplementation`, y más
@@ -329,7 +333,7 @@ choco install plantuml         # Windows
 
 Sin config, el analizador usa defaults genéricos para cualquier proyecto Android. La configuración es **opt-in**: la herramienta funciona sin ningún archivo de config.
 
-Si querés personalizar colores, íconos y estilos, creá un `analyzer_config.json` en el directorio desde donde corrés el comando:
+Si quieres personalizar colores, íconos y estilos, crea un `analyzer_config.json` en el directorio desde donde ejecutas el comando:
 
 **Instalado con pipx:**
 ```bash
@@ -364,14 +368,14 @@ cp analyzer_config.example.json analyzer_config.json
 }
 ```
 
-Solo incluí los campos que querés cambiar — el resto usa defaults.
+Solo incluye los campos que quieres cambiar — el resto usa defaults.
 
 **Orden de búsqueda:**
 1. `--config <path>` explícito
-2. `analyzer_config.json` en el directorio actual (donde corrés el comando)
+2. `analyzer_config.json` en el directorio actual (donde ejecutas el comando)
 3. Defaults internos
 
-> **Tip:** si siempre analizás el mismo proyecto, poné el `analyzer_config.json` en la raíz de ese proyecto y corré el comando desde ahí. Si analizás varios proyectos, usá `--config ~/mi-config.json`.
+> **Tip:** si siempre analizas el mismo proyecto, pon el `analyzer_config.json` en la raíz de ese proyecto y ejecuta el comando desde ahí. Si analizas varios proyectos, usa `--config ~/mi-config.json`.
 
 </details>
 
@@ -379,7 +383,7 @@ Solo incluí los campos que querés cambiar — el resto usa defaults.
 
 ## ⚙️ Configuración por proyecto (`analyzer.yml`)
 
-Si creás un archivo `analyzer.yml` en la **raíz del proyecto Android analizado**, las herramientas lo leerán automáticamente y usarán sus valores como defaults. Los flags de CLI siempre tienen prioridad sobre el yml.
+Si creas un archivo `analyzer.yml` en la **raíz del proyecto Android analizado**, las herramientas lo leerán automáticamente y usarán sus valores como defaults. Los flags de CLI siempre tienen prioridad sobre el yml.
 
 ```yaml
 sanity:
@@ -492,9 +496,11 @@ android-gradle-analyzer/
 3. Paths → nombres: `payments/home` → `payments:home`.
 
 **Extracción de dependencias**
-1. Lee cada `build.gradle`.
-2. Regex sobre cada scope: `implementation project(":...")`, `api(project(":..."))`, `kapt project(':...')`, etc.
-3. Normaliza y guarda las relaciones por scope.
+1. Lee cada `build.gradle` / `build.gradle.kts`.
+2. Para `.kts`: usa tree-sitter (si está instalado) para obtener un AST real — maneja multilínea, comentarios y parámetros nombrados. Si no está disponible, cae en regex.
+3. Para `.gradle`: preprocesa el contenido (elimina comentarios `//` y `/* */`, colapsa declaraciones multilínea) y aplica regex.
+4. Soporta formato clásico (`project(":foo:bar")`) y type-safe accessors (`projects.foo.barBaz`).
+5. Matching exacto contra la lista de módulos conocidos — sin heurísticas de prefijo.
 
 **Generación de diagramas**
 1. Clasifica módulos por tipo (common, gateway, features).
@@ -527,16 +533,16 @@ En `gradle_analyzer.py`, función `generate_plantuml()`:
 <summary><b>Troubleshooting</b></summary>
 
 **"No se encontró gradle para: [módulo]"**
-El módulo no tiene `build.gradle` ni `build.gradle.kts`. Verificá el path.
+El módulo no tiene `build.gradle` ni `build.gradle.kts`. Verifica el path.
 
 **Diagrama apretado**
-Subí los valores de espaciado (ver sección anterior).
+Sube los valores de espaciado (ver sección anterior).
 
 **No detecta algunas dependencias**
-El formato del gradle puede ser distinto al estándar. Revisá los patrones en `analyzer_utils.py` (constante `DEPENDENCY_SCOPES`).
+Para archivos `.kts`, instala el parser AST: `pip install tree-sitter tree-sitter-kotlin`. Para `.gradle`, el preprocesador ya maneja multilínea y comentarios. Si el problema persiste, revisa los patrones en `analyzer_utils.py` (constante `DEPENDENCY_SCOPES`).
 
 **El menú no arranca tras clonar**
-Instalá las dependencias: `pip install -r requirements.txt`
+Instala las dependencias: `pip install -r requirements.txt`
 
 </details>
 
@@ -564,7 +570,7 @@ Las métricas de `gradle_sanity.py` están basadas en fuentes verificadas:
 
 ## 🤝 Contribuir
 
-Las contribuciones son bienvenidas. Forkeá, creá una rama, commiteá y abrí un PR. Ver [CONTRIBUTING.md](CONTRIBUTING.md) para detalles.
+Las contribuciones son bienvenidas. Forkea, crea una rama, commitea y abre un PR. Ver [CONTRIBUTING.md](CONTRIBUTING.md) para detalles.
 
 ## 📄 Licencia
 

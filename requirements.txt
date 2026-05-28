@@ -1,6 +1,12 @@
 questionary>=2.0
 rich>=13.7
 
+# Parser KTS con AST real (opcional) — mejora detección en .gradle.kts
+# Maneja multilínea, comentarios y parámetros nombrados correctamente.
+# Instalar: pip install tree-sitter tree-sitter-kotlin
+# tree-sitter>=0.22
+# tree-sitter-kotlin>=0.3
+
 # PDF export (opcional) — requiere GTK/Pango en Windows
 # Windows: https://doc.courtbouillon.org/weasyprint/stable/first_steps.html
 # macOS/Linux: pip install weasyprint
