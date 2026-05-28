@@ -5,6 +5,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-05-27
+
+### Added
+- **Parser tree-sitter para `.gradle.kts`**: cuando `tree-sitter-kotlin` está instalado (`pip install "android-gradle-analyzer[kts]"`), los archivos KTS se parsean con un AST real en lugar de regex. Maneja correctamente: dependencias multilínea, comentarios de línea `//` y de bloque `/* */`, y parámetros nombrados `project(path = ":module")`. El fallback a regex es automático si la librería no está disponible
+- **Preprocesador Groovy** para archivos `.gradle`: antes de aplicar regex, se eliminan comentarios `//` y `/* */` y se colapsan declaraciones multilínea (e.g. `implementation(\n  project(":core")\n)`). Elimina falsos negativos por comentarios y falsos positivos desde dependencias comentadas
+- Nueva función `_strip_comments` (interna): limpia comentarios sin colapso de paréntesis — usada en el path KTS para los accessors `projects.*`
+- Nuevos fixtures de test: `kts_multiline`, `kts_commented`, `groovy_multiline`
+- Nuevas clases de test: `TestPreprocessGroovy` y `TestKtsTreeSitter` (se saltan automáticamente si `tree-sitter-kotlin` no está instalado)
+- Nueva dependencia opcional `kts`: `pip install "android-gradle-analyzer[kts]"` instala `tree-sitter>=0.22` y `tree-sitter-kotlin>=0.3`
+
 ## [1.2.1] - 2026-05-26
 
 ### Changed

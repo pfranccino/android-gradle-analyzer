@@ -6,6 +6,7 @@ Utilidades compartidas para el Android Gradle Dependency Analyzer.
 import re
 import sys
 import json
+import threading
 from pathlib import Path
 from collections import defaultdict
 
@@ -197,6 +198,158 @@ def build_accessor_map(known_modules) -> dict:
     return accessor_map
 
 
+_SCOPES_SET = set(DEPENDENCY_SCOPES.keys())
+
+
+# ─── Tree-sitter (opcional, para .gradle.kts) ─────────────────────────────
+#
+# Cuando tree-sitter-kotlin está instalado, los archivos .kts se parsean con
+# un AST real. Maneja correctamente: multilínea, comentarios y parámetros
+# nombrados (project(path = ":module")).
+# Si no está disponible o falla, se hace fallback a regex.
+# Instalar: pip install tree-sitter tree-sitter-kotlin
+
+_KTS_LANGUAGE  = None
+_KTS_AVAILABLE = None   # None=no chequeado · True=ok · False=no disponible
+_KTS_INIT_LOCK = threading.Lock()
+
+
+def _ensure_kts_language() -> bool:
+    """Carga tree-sitter-kotlin una sola vez (thread-safe)."""
+    global _KTS_LANGUAGE, _KTS_AVAILABLE
+    if _KTS_AVAILABLE is not None:
+        return _KTS_AVAILABLE
+    with _KTS_INIT_LOCK:
+        if _KTS_AVAILABLE is not None:
+            return _KTS_AVAILABLE
+        try:
+            import tree_sitter_kotlin as tsk
+            from tree_sitter import Language
+            _KTS_LANGUAGE  = Language(tsk.language())
+            _KTS_AVAILABLE = True
+        except Exception:
+            _KTS_AVAILABLE = False
+    return _KTS_AVAILABLE
+
+
+def _ts_call_name(node) -> str | None:
+    for child in node.children:
+        if child.type == 'simple_identifier':
+            return child.text.decode('utf-8')
+    return None
+
+
+def _ts_first_string(node) -> str | None:
+    """DFS: primer string_literal en el subárbol, devuelve el contenido sin comillas."""
+    if node.type == 'string_literal':
+        text = node.text.decode('utf-8')
+        if len(text) >= 2:
+            return text[1:-1]
+    for child in node.children:
+        found = _ts_first_string(child)
+        if found is not None:
+            return found
+    return None
+
+
+def _ts_find_project_path(node) -> str | None:
+    """Extrae la ruta de una llamada project(':ruta') o project(path = ':ruta')."""
+    if _ts_call_name(node) != 'project':
+        return None
+    for child in node.children:
+        if child.type == 'call_suffix':
+            path = _ts_first_string(child)
+            if path is not None:
+                return path
+    return None
+
+
+def _ts_visit(node, result: dict, known_set: set, self_module: str) -> None:
+    """
+    Visita recursiva del AST buscando scope(project(':modulo')).
+    Usa matching exacto contra known_set (igual que el path regex).
+    """
+    if node.type == 'call_expression':
+        scope = _ts_call_name(node)
+        if scope in _SCOPES_SET:
+            for child in node.children:
+                if child.type == 'call_suffix':
+                    for va in child.children:
+                        if va.type == 'value_arguments':
+                            for arg in va.children:
+                                if arg.type == 'value_argument':
+                                    for expr in arg.children:
+                                        if expr.type == 'call_expression':
+                                            path = _ts_find_project_path(expr)
+                                            if path is not None:
+                                                normalized = normalize_module_name(path.lstrip(':'))
+                                                if normalized in known_set and normalized != self_module:
+                                                    result[scope].add(normalized)
+            return
+    for child in node.children:
+        _ts_visit(child, result, known_set, self_module)
+
+
+def _parse_kts_project_calls(gradle_file: 'Path', known_set: set, self_module: str) -> 'dict | None':
+    """
+    Parsea las llamadas project(":m") de un .kts con tree-sitter.
+    Retorna None si tree-sitter no está disponible o falla → el caller usa regex.
+    Crea un Parser por llamada para thread-safety en ThreadPoolExecutor.
+    """
+    if not _ensure_kts_language():
+        return None
+    try:
+        from tree_sitter import Parser
+        parser = Parser(_KTS_LANGUAGE)
+        tree   = parser.parse(gradle_file.read_bytes())
+        result: dict = {}
+        _ts_visit(tree.root_node, result, known_set, self_module)
+        return result
+    except Exception:
+        return None
+
+
+# ─── Preprocesador Groovy ──────────────────────────────────────────────────
+
+def _strip_comments(content: str) -> str:
+    """Elimina comentarios de bloque /* */ y de línea // del contenido."""
+    content = re.sub(r'/\*.*?\*/', ' ', content, flags=re.DOTALL)
+    content = re.sub(r'//[^\n]*', '', content)
+    return content
+
+
+def _preprocess_groovy(content: str) -> str:
+    """
+    Preprocesa Groovy DSL antes de aplicar regex:
+      1. Elimina comentarios de bloque /* ... */ y de línea //
+      2. Colapsa declaraciones multilínea uniendo líneas dentro de paréntesis abiertos
+
+    No es un parser completo — cubre los patrones de dependencias habituales.
+    """
+    content = _strip_comments(content)
+    result = []
+    buf    = []
+    depth  = 0
+    for ch in content:
+        if ch == '(':
+            depth += 1
+            buf.append(ch)
+        elif ch == ')':
+            depth -= 1
+            buf.append(ch)
+        elif ch == '\n':
+            if depth > 0:
+                buf.append(' ')
+            else:
+                result.append(''.join(buf))
+                buf = []
+        else:
+            buf.append(ch)
+    if buf:
+        result.append(''.join(buf))
+    return '\n'.join(result)
+
+
 # ─── Parsing de Gradle ─────────────────────────────────────────────────────
 
 def parse_gradle_file_scoped(gradle_file, known_modules, self_module):
@@ -218,15 +371,37 @@ def parse_gradle_file_scoped(gradle_file, known_modules, self_module):
     Returns:
         dict[str, set[str]]: {scope: {modulos_dependidos}}
     """
-    result = defaultdict(set)
+    result       = defaultdict(set)
+    gradle_file  = Path(gradle_file)
     known_set    = {normalize_module_name(m.lstrip(':')) for m in known_modules}
     accessor_map = build_accessor_map(known_modules)
 
     try:
-        with open(gradle_file, 'r', encoding='utf-8') as f:
-            content = f.read()
+        is_kts = gradle_file.suffix == '.kts'
 
-        # ── Patrón clásico: project(":foo:bar")
+        if is_kts:
+            # ── KTS: tree-sitter para project() calls ─────────────────────
+            ts_result = _parse_kts_project_calls(gradle_file, known_set, self_module)
+            if ts_result is not None:
+                for scope, deps in ts_result.items():
+                    result[scope].update(deps)
+                # Accessor patterns (projects.foo.bar) siempre por regex.
+                # Usamos _strip_comments para no matchear accessors comentados.
+                content = _strip_comments(gradle_file.read_text(encoding='utf-8'))
+                for scope, patterns in ACCESSOR_SCOPES.items():
+                    for pattern in patterns:
+                        for match in re.finditer(pattern, content):
+                            accessor = match.group(1)
+                            module   = accessor_map.get(accessor)
+                            if module and module != self_module:
+                                result[scope].add(module)
+                return result
+
+        # ── Fallback regex (KTS sin tree-sitter, o Groovy) ────────────────
+        content = gradle_file.read_text(encoding='utf-8')
+        if not is_kts:
+            content = _preprocess_groovy(content)
+
         for scope, patterns in DEPENDENCY_SCOPES.items():
             for pattern in patterns:
                 for match in re.finditer(pattern, content):
@@ -235,7 +410,6 @@ def parse_gradle_file_scoped(gradle_file, known_modules, self_module):
                     if normalized in known_set and normalized != self_module:
                         result[scope].add(normalized)
 
-        # ── Type-safe accessors: projects.foo.barBaz
         for scope, patterns in ACCESSOR_SCOPES.items():
             for pattern in patterns:
                 for match in re.finditer(pattern, content):

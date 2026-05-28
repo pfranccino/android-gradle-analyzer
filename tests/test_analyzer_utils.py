@@ -1,9 +1,11 @@
 """
 Tests para analyzer_utils.py:
-  - parse_gradle_file_scoped: verifica que no haya falsos positivos por endswith (bug 1)
-  - detect_cycles: verifica detección correcta de ciclos directos e indirectos (bug 3)
+  - parse_gradle_file_scoped: regex Groovy, tree-sitter KTS y type-safe accessors
+  - detect_cycles: detección de ciclos directos e indirectos
+  - _preprocess_groovy: strip de comentarios y colapso multilínea
 """
 
+import pytest
 from pathlib import Path
 
 from analyzer_utils import (
@@ -13,6 +15,8 @@ from analyzer_utils import (
     list_modules,
     module_to_accessor,
     build_accessor_map,
+    _preprocess_groovy,
+    _strip_comments,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -295,3 +299,135 @@ class TestParseSettingsModules:
         modules = parse_settings_modules(FIXTURES / "with_settings")
         assert modules is not None
         assert "app" in modules
+
+
+# ── _preprocess_groovy / _strip_comments ──────────────────────────────────────
+
+class TestPreprocessGroovy:
+
+    def test_strips_line_comments(self):
+        """Líneas con // no deben quedar en el output."""
+        content   = "// implementation project(':core')\nimplementation project(':shared')"
+        processed = _preprocess_groovy(content)
+        assert ":core"   not in processed
+        assert ":shared" in processed
+
+    def test_strips_block_comments(self):
+        """Bloques /* */ no deben quedar en el output."""
+        content   = "/* implementation project(':core') */\nimplementation project(':shared')"
+        processed = _preprocess_groovy(content)
+        assert ":core"   not in processed
+        assert ":shared" in processed
+
+    def test_collapses_multiline_parens(self):
+        """Dependencia multilínea dentro de () queda en una sola línea."""
+        content   = "implementation(\n    project(':core')\n)"
+        processed = _preprocess_groovy(content)
+        assert "\n" not in processed.strip()
+        assert ":core" in processed
+
+    def test_multiline_groovy_dep_detected(self):
+        """parse_gradle_file_scoped detecta deps multilínea en Groovy."""
+        gradle_file = FIXTURES / "groovy_multiline" / "app" / "build.gradle"
+        known  = ["app", "core", "shared", "ignored", "also-ignored"]
+        result = parse_gradle_file_scoped(gradle_file, known, "app")
+
+        assert "core"   in result.get("implementation", set())
+        assert "shared" in result.get("api", set())
+
+    def test_groovy_commented_deps_ignored(self):
+        """Dependencias en comentarios Groovy no aparecen en el resultado."""
+        gradle_file = FIXTURES / "groovy_multiline" / "app" / "build.gradle"
+        known    = ["app", "core", "shared", "ignored", "also-ignored"]
+        result   = parse_gradle_file_scoped(gradle_file, known, "app")
+        all_deps = {dep for deps in result.values() for dep in deps}
+
+        assert "ignored"      not in all_deps
+        assert "also-ignored" not in all_deps
+
+    def test_strip_comments_removes_block_and_line(self):
+        content = "/* block */\ncode // line\nmore"
+        out     = _strip_comments(content)
+        assert "block" not in out
+        assert "line"  not in out
+        assert "code"  in out
+        assert "more"  in out
+
+
+# ── Tree-sitter KTS ───────────────────────────────────────────────────────────
+
+class TestKtsTreeSitter:
+    """
+    Tests para el parser tree-sitter de archivos .gradle.kts.
+    Se saltan automáticamente si tree-sitter-kotlin no está instalado.
+    """
+
+    def test_multiline_kts_implementation(self):
+        """Tree-sitter detecta implementation multilínea en KTS."""
+        pytest.importorskip("tree_sitter_kotlin")
+        gradle_file = FIXTURES / "kts_multiline" / "app" / "build.gradle.kts"
+        known  = ["app", "core", "shared"]
+        result = parse_gradle_file_scoped(gradle_file, known, "app")
+
+        assert "core" in result.get("implementation", set())
+
+    def test_multiline_kts_api(self):
+        """Tree-sitter detecta api multilínea anidada en KTS."""
+        pytest.importorskip("tree_sitter_kotlin")
+        gradle_file = FIXTURES / "kts_multiline" / "app" / "build.gradle.kts"
+        known  = ["app", "core", "shared"]
+        result = parse_gradle_file_scoped(gradle_file, known, "app")
+
+        assert "shared" in result.get("api", set())
+
+    def test_kts_line_comment_ignored(self):
+        """Dependencias en // no aparecen con tree-sitter."""
+        pytest.importorskip("tree_sitter_kotlin")
+        gradle_file = FIXTURES / "kts_commented" / "app" / "build.gradle.kts"
+        known    = ["app", "core", "shared", "network"]
+        result   = parse_gradle_file_scoped(gradle_file, known, "app")
+        all_deps = {dep for deps in result.values() for dep in deps}
+
+        assert "core" not in all_deps
+
+    def test_kts_block_comment_ignored(self):
+        """Dependencias en /* */ no aparecen con tree-sitter."""
+        pytest.importorskip("tree_sitter_kotlin")
+        gradle_file = FIXTURES / "kts_commented" / "app" / "build.gradle.kts"
+        known    = ["app", "core", "shared", "network"]
+        result   = parse_gradle_file_scoped(gradle_file, known, "app")
+        all_deps = {dep for deps in result.values() for dep in deps}
+
+        assert "shared" not in all_deps
+
+    def test_kts_real_dep_detected(self):
+        """La única dep real (no comentada) sí aparece."""
+        pytest.importorskip("tree_sitter_kotlin")
+        gradle_file = FIXTURES / "kts_commented" / "app" / "build.gradle.kts"
+        known  = ["app", "core", "shared", "network"]
+        result = parse_gradle_file_scoped(gradle_file, known, "app")
+
+        assert "network" in result.get("implementation", set())
+
+    def test_kts_no_self_reference(self):
+        """Tree-sitter no incluye el propio módulo como dependencia."""
+        pytest.importorskip("tree_sitter_kotlin")
+        gradle_file = FIXTURES / "kts_multiline" / "app" / "build.gradle.kts"
+        known  = ["app", "core", "shared"]
+        result = parse_gradle_file_scoped(gradle_file, known, "app")
+
+        for deps in result.values():
+            assert "app" not in deps
+
+    def test_kts_exact_match_only(self):
+        """Tree-sitter usa matching exacto — project(':core') no matchea 'payments:core'."""
+        pytest.importorskip("tree_sitter_kotlin")
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            g = Path(tmp) / "build.gradle.kts"
+            g.write_text('dependencies { implementation(project(":core")) }')
+            known  = ["core", "payments:core"]
+            result = parse_gradle_file_scoped(g, known, "caller")
+            deps   = {d for v in result.values() for d in v}
+            assert "core"          in deps
+            assert "payments:core" not in deps

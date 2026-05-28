@@ -1,0 +1,14 @@
+plugins {
+    id 'com.android.application'
+}
+
+dependencies {
+    implementation(
+        project(":core")
+    )
+    /*
+     * api(project(":ignored"))
+     */
+    // testImplementation project(":also-ignored")
+    api project(":shared")
+}
