@@ -59,5 +59,22 @@
     "high_fan_out_penalty":   3,
     "hardcoded_version":      2,
     "sdp_threshold":          0.3
+  },
+
+  "coupling_limits": {
+    "_comentario": "Detecta 'lógica compartida mal ubicada': un módulo de alto nivel (feature o app, I alto) del que OTROS dependen.",
+    "_comentario2": "Advisory por default: con penalty=0 solo aparece en el reporte, no afecta el score. Súbelo para activar el gate en CI.",
+    "_comentario3": "Funciona sin este bloque (usa estos mismos defaults). core/common quedan excluidos solos por tener I bajo.",
+
+    "leaf_instability": 0.70,
+    "leaf_max_ca":      1,
+    "leaf_penalty":     0,
+    "app_max_ca":       0,
+    "app_penalty":      0
+  },
+
+  "coupling_overrides": {
+    "_comentario": "Fuerza el rol de módulos puntuales cuando la métrica se equivoca. Valores: 'app' | 'leaf' | 'ignore'.",
+    "_comentario2": "Match por nombre completo o por último segmento. 'ignore' excluye al módulo de esta validación."
   }
 }

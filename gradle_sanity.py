@@ -22,7 +22,7 @@ from pathlib import Path
 from collections import defaultdict
 
 from gradle_analyzer import GradleDependencyAnalyzer
-from analyzer_utils import load_config, load_project_config
+from analyzer_utils import load_config, load_project_config, _strip_comments
 
 
 # Regex para detectar versiones hardcodeadas del tipo "group:artifact:1.2.3"
@@ -51,6 +51,7 @@ class GradleSanityAnalyzer:
         self.fan_out_issues  = []
         self.version_issues  = []
         self.orphan_modules  = []
+        self.coupling_issues = []   # [(module, kind, I, ca, max_ca)] · kind: "app"|"feature"
 
     def analyze(self):
         self._dep.scan_modules()
@@ -61,6 +62,7 @@ class GradleSanityAnalyzer:
         self._check_api_hygiene()
         self._check_fan_out()
         self._check_hardcoded_versions()
+        self._check_leaf_coupling()
         return self
 
     def _compute_coupling(self):
@@ -138,6 +140,15 @@ class GradleSanityAnalyzer:
             if ce > threshold:
                 self.fan_out_issues.append((module, ce))
 
+    def _gradle_file_for(self, module: str) -> Path | None:
+        """Devuelve el build.gradle(.kts) de un módulo, o None si no existe."""
+        module_path = self.base_path / module.replace(':', '/')
+        for name in ("build.gradle.kts", "build.gradle"):
+            candidate = module_path / name
+            if candidate.exists():
+                return candidate
+        return None
+
     def _check_hardcoded_versions(self):
         """
         Versiones hardcodeadas dificultan el mantenimiento en proyectos multi-módulo.
@@ -146,12 +157,8 @@ class GradleSanityAnalyzer:
         No detecta: project(':module'), libs.xxx
         """
         for module in self._dep.modules:
-            module_path = self.base_path / module.replace(':', '/')
-            gradle_file = module_path / "build.gradle.kts"
-            if not gradle_file.exists():
-                gradle_file = module_path / "build.gradle"
-
-            if gradle_file.exists():
+            gradle_file = self._gradle_file_for(module)
+            if gradle_file is not None:
                 try:
                     content = gradle_file.read_text(encoding='utf-8')
                     active = "\n".join(
@@ -163,6 +170,59 @@ class GradleSanityAnalyzer:
                         self.version_issues.append((module, matches))
                 except Exception as e:
                     print(f"  ⚠️  Error leyendo {gradle_file.name}: {e}")
+
+    def _is_app(self, module: str) -> bool:
+        """
+        Determina si un módulo es el punto de entrada (app).
+        Precedencia: override explícito en `coupling_overrides`, luego la única señal
+        de plugin confiable: `com.android.application` en el build file.
+        No resuelve `alias(libs.plugins...)` (requiere el version catalog).
+        """
+        overrides = self.config.get("coupling_overrides", {})
+        forced = overrides.get(module) or overrides.get(module.split(":")[-1])
+        if forced == "app":
+            return True
+        if forced in ("leaf", "ignore"):
+            return False
+
+        gradle_file = self._gradle_file_for(module)
+        if gradle_file is None:
+            return False
+        try:
+            content = _strip_comments(gradle_file.read_text(encoding='utf-8'))
+        except Exception:
+            return False
+        return "com.android.application" in content
+
+    def _check_leaf_coupling(self):
+        """
+        Detecta "lógica compartida mal ubicada": un módulo de alto nivel (feature o app:
+        I alto, en la punta del grafo de dependencias) del que sin embargo otros dependen.
+        Suele indicar código común atrapado arriba en vez de bajar a core/shared.
+
+        La I baja de core/common los excluye automáticamente — un módulo base con Ca alto
+        es esperado, no un problema. No depende de nombres ni de plugins (salvo el refinamiento
+        opcional de `com.android.application` para distinguir el punto de entrada).
+        """
+        limits   = self.config.get("coupling_limits", {})
+        leaf_i   = limits.get("leaf_instability", 0.70)
+        leaf_ca  = limits.get("leaf_max_ca", 1)
+        app_ca   = limits.get("app_max_ca", 0)
+        overrides = self.config.get("coupling_overrides", {})
+
+        for module in self._dep.modules:
+            forced = overrides.get(module) or overrides.get(module.split(":")[-1])
+            if forced == "ignore":
+                continue
+            i = self.instability.get(module, 0.0)
+            if i < leaf_i:
+                continue   # core/shared: Ca alto es legítimo, no es una hoja
+            ca     = self.ca.get(module, 0)
+            is_app = self._is_app(module)
+            max_ca = app_ca if is_app else leaf_ca
+            if ca > max_ca:
+                kind = "app" if is_app else "feature"
+                self.coupling_issues.append((module, kind, round(i, 2), ca, max_ca))
 
     # ── Score ─────────────────────────────────────────────────────────────────
 
@@ -182,6 +242,10 @@ class GradleSanityAnalyzer:
 
         version_count = sum(len(versions) for _, versions in self.version_issues)
         score -= version_count * w.get("hardcoded_version", 2)
+
+        limits = self.config.get("coupling_limits", {})
+        for _module, kind, _i, _ca, _max_ca in self.coupling_issues:
+            score -= limits.get("app_penalty", 0) if kind == "app" else limits.get("leaf_penalty", 0)
 
         return max(0, score)
 
@@ -368,12 +432,40 @@ class GradleSanityAnalyzer:
             lines.append("   Sin módulos huérfanos ✅")
         lines.append("")
 
+        # — Lógica compartida mal ubicada
+        cl       = self.config.get("coupling_limits", {})
+        leaf_pen = cl.get("leaf_penalty", 0)
+        app_pen  = cl.get("app_penalty", 0)
+        if leaf_pen == 0 and app_pen == 0:
+            pen_note = "informativo (sin penalización)"
+        else:
+            pen_note = f"feature -{leaf_pen} / app -{app_pen} pts"
+        lines.append(f"🟠 LÓGICA COMPARTIDA MAL UBICADA ({len(self.coupling_issues)})  —  {pen_note}")
+        lines.append(
+            "   Un \"módulo hoja\" (término de grafos para el extremo de I alto del árbol de\n"
+            "   dependencias) — es decir, un feature o el punto de entrada de la app — del que\n"
+            "   sin embargo OTROS dependen. Suele indicar código común atrapado arriba en lugar\n"
+            "   de bajar a core/shared. La I baja de core/common los excluye automáticamente."
+        )
+        if self.coupling_issues:
+            for (module, kind, i, ca, max_ca) in self.coupling_issues:
+                etiqueta = "punto de entrada" if kind == "app" else "feature"
+                lines.append(f"   ⚠️  {module}  [{etiqueta}]  I={i:.2f}  Ca={ca} (límite: {max_ca})")
+        else:
+            lines.append("   Sin lógica compartida mal ubicada ✅")
+        lines.append("")
+
         # ── Score ─────────────────────────────────────────────────────────────
         n_cycles   = len(self.cycles)
         n_sdp      = len(self.sdp_violations)
         n_api      = len(self.api_issues)
         n_fanout   = len(self.fan_out_issues)
         n_versions = sum(len(v) for _, v in self.version_issues)
+        n_coupling   = len(self.coupling_issues)
+        coupling_pts = sum(
+            cl.get("app_penalty", 0) if kind == "app" else cl.get("leaf_penalty", 0)
+            for _m, kind, _i, _ca, _max in self.coupling_issues
+        )
 
         lines += [
             SEP,
@@ -389,6 +481,7 @@ class GradleSanityAnalyzer:
             f"  {'Api innecesario (' + str(n_api) + ' × ' + str(w.get('unnecessary_api', 5)) + ' pts):':<45} {'-' + str(n_api * w.get('unnecessary_api', 5)):>6}",
             f"  {'Fan-out excesivo (' + str(n_fanout) + ' × ' + str(w.get('high_fan_out_penalty', 3)) + ' pts):':<45} {'-' + str(n_fanout * w.get('high_fan_out_penalty', 3)):>6}",
             f"  {'Versiones hardcodeadas (' + str(n_versions) + ' × ' + str(w.get('hardcoded_version', 2)) + ' pts):':<45} {'-' + str(n_versions * w.get('hardcoded_version', 2)):>6}",
+            f"  {'Lógica compartida mal ubicada (' + str(n_coupling) + ' issue(s)):':<45} {'-' + str(coupling_pts):>6}",
             f"  {sep[:51]}",
             f"  {'PUNTUACIÓN FINAL:':<45} {score:>5} / 100",
             "",
@@ -453,6 +546,10 @@ class GradleSanityAnalyzer:
                 for m, versions in self.version_issues
             ],
             "orphan_modules": self.orphan_modules,
+            "coupling_issues": [
+                {"module": m, "kind": kind, "I": i, "ca": ca, "max_ca": max_ca}
+                for m, kind, i, ca, max_ca in self.coupling_issues
+            ],
         }
 
 

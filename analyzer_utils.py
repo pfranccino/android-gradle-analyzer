@@ -483,6 +483,17 @@ _DEFAULTS = {
         "hardcoded_version": 2,       # -2 por cada versión hardcodeada encontrada
         "sdp_threshold": 0.3,         # diferencia mínima de I para considerar violación SDP
     },
+    "coupling_limits": {
+        # Detecta "lógica compartida mal ubicada": un módulo de alto nivel (feature o app:
+        # I alto, en la punta del grafo) del que sin embargo otros dependen.
+        # penalty=0 → solo informativo (no afecta el score). Súbelo para activar el gate en CI.
+        "leaf_instability": 0.70,     # I >= esto → módulo se considera "hoja" (feature/app)
+        "leaf_max_ca":      1,        # Ca permitido para una hoja (la app puede consumirla)
+        "leaf_penalty":     0,        # -N por cada feature con Ca excedido (0 = advisory)
+        "app_max_ca":       0,        # Ca permitido para un módulo app (punto de entrada)
+        "app_penalty":      0,        # -N por cada app con dependientes (0 = advisory)
+    },
+    "coupling_overrides": {},         # {"modulo": "app" | "leaf" | "ignore"}
 }
 
 

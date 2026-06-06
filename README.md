@@ -130,6 +130,7 @@ Dado un módulo, muestra qué otros módulos se romperían si cambia (BFS sobre 
 - 🌳 **Parser AST para `.kts`** (opcional) — usa tree-sitter-kotlin para manejar dependencias multilínea y comentados correctamente
 - 🎨 **Colores por tipo** (common, gateway, features)
 - ⚠️ **Detección automática de ciclos**
+- 🍃 **Lógica compartida mal ubicada** — detecta una hoja (feature/app) de la que otros dependen, sin depender de nombres ni plugins
 - 🔭 **Scopes soportados:** `implementation`, `api`, `kapt`, `compileOnly`, `testImplementation`, y más
 - ⚙️ **Configuración personalizable** via `analyzer_config.json`
 - 🤫 **`--quiet`** en todos los CLIs para suprimir output de progreso
@@ -244,6 +245,11 @@ PUNTUACIÓN FINAL: 91 / 100  🟢 Excelente
 | **Ce** | De cuántos depende éste (fan-out). Alto en `app` o features de alto nivel. |
 | **I** | `Ce / (Ce + Ca)`. 0 = muy estable, 1 = muy inestable. |
 
+> **Pirámide de dependencias:** los módulos de **I alto** (features, app) están "arriba"
+> — usan a otros pero nadie debería depender de ellos (son las **hojas** del árbol).
+> Los de **I bajo** (`core`, `common`) están "abajo": todos dependen de ellos.
+> Las flechas deben apuntar de arriba (inestable) hacia abajo (estable).
+
 **¿Qué detecta?**
 
 | Problema | Penalización default | Descripción |
@@ -253,8 +259,9 @@ PUNTUACIÓN FINAL: 91 / 100  🟢 Excelente
 | `api` innecesario | −5 pts | Usa `api` pero `Ca=0` |
 | Fan-out excesivo | −3 pts | `Ce` supera el umbral (default: 5) |
 | Versión hardcodeada | −2 pts | `"lib:x:1.2.3"` en vez de Version Catalog |
+| Lógica compartida mal ubicada | informativo (configurable) | Una hoja (feature o app, `I` alto) de la que otros dependen (`Ca` sobre el límite) |
 
-Los pesos son configurables en `analyzer_config.json` bajo `sanity_weights`.
+Los pesos son configurables en `analyzer_config.json` bajo `sanity_weights` y `coupling_limits`.
 
 </details>
 
@@ -376,6 +383,30 @@ Solo incluye los campos que quieres cambiar — el resto usa defaults.
 3. Defaults internos
 
 > **Tip:** si siempre analizas el mismo proyecto, pon el `analyzer_config.json` en la raíz de ese proyecto y ejecuta el comando desde ahí. Si analizas varios proyectos, usa `--config ~/mi-config.json`.
+
+</details>
+
+<details>
+<summary><b>Detector de "lógica compartida mal ubicada" (<code>coupling_limits</code>)</b></summary>
+
+Detecta una **hoja** (feature o app: `I` alto, en la punta del grafo) de la que **otros módulos dependen** — señal de que código común quedó atrapado arriba en vez de bajar a `core`/`shared`. No depende de nombres ni de plugins: se basa en las métricas que el tool ya calcula. `core`/`common` quedan excluidos solos por tener `I` bajo.
+
+Funciona **sin configuración** con estos defaults. Es **advisory** (`penalty: 0` → solo aparece en el reporte, no afecta el score); súbelo para activar el gate en CI.
+
+```json
+{
+  "coupling_limits": {
+    "leaf_instability": 0.70,
+    "leaf_max_ca":      1,
+    "leaf_penalty":     0,
+    "app_max_ca":       0,
+    "app_penalty":      0
+  },
+  "coupling_overrides": { "legacy:util": "ignore" }
+}
+```
+
+El punto de entrada se detecta por el plugin `com.android.application`; `coupling_overrides` permite forzar (`"app"`/`"leaf"`) o excluir (`"ignore"`) módulos puntuales.
 
 </details>
 

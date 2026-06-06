@@ -1,0 +1,11 @@
+plugins {
+    id 'com.android.library'
+}
+
+dependencies {
+    implementation project(":core")
+    implementation project(":network")
+    implementation project(":database")
+    implementation project(":model")
+    implementation project(":util")
+}

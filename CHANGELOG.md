@@ -5,6 +5,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-06-06
+
+### Added
+- **Detector de "lógica compartida mal ubicada"** en `gradle-sanity`: identifica un módulo *hoja* (feature o app — `I` alto, en la punta del grafo de dependencias) del que sin embargo **otros módulos dependen** (`Ca` por encima del límite). Suele indicar código común atrapado en un feature en vez de estar en `core`/`shared`. Se basa solo en las métricas que el tool ya calcula (`I` y `Ca`) — **no depende de nombres de módulo ni de plugins**, y `core`/`common` quedan excluidos automáticamente por tener `I` bajo (su `Ca` alto es esperado)
+- **Advisory por default**: con `leaf_penalty`/`app_penalty` en `0` el detector solo aparece en el reporte y en el JSON (`coupling_issues`) sin afectar el score → cero regresión para proyectos existentes. Subir las penalizaciones activa el gate en CI
+- Nueva config `coupling_limits` (`leaf_instability`, `leaf_max_ca`, `leaf_penalty`, `app_max_ca`, `app_penalty`) — funciona sin `analyzer_config.json` usando los defaults internos
+- El punto de entrada (app) se detecta por el plugin `com.android.application` (única señal de plugin confiable; `com.android.library` no distingue rol). `coupling_overrides` permite forzar (`"app"`/`"leaf"`) o excluir (`"ignore"`) módulos puntuales cuando la métrica se equivoca
+- Nueva clase de test `TestLeafCoupling` y fixture `leaf_coupling`
+
+### Known limitations
+- La detección del plugin de app no resuelve `alias(libs.plugins.android.application)` (requiere leer el version catalog); solo el `id("com.android.application")` literal. El detector funciona igual sin esa señal — solo pierde el umbral más estricto del punto de entrada
+
 ## [1.2.2] - 2026-05-27
 
 ### Added
