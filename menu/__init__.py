@@ -60,7 +60,7 @@ def _get_project_and_modules(prompts, list_modules):
 def _handle_export(last_result, prompts, ui, console,
                    to_html, to_pdf, to_markdown, to_zip, PDF_AVAILABLE):
     if not last_result:
-        ui.print_error("No hay ningún análisis reciente. Ejecutá primero un análisis.")
+        ui.print_error("No hay ningún análisis reciente. Ejecuta primero un análisis.")
         return
 
     formats = prompts.ask_export_formats(pdf_available=PDF_AVAILABLE)
@@ -151,7 +151,7 @@ def _render_dot(dot_path: str, fmt: str, console) -> None:
     import shutil
     import subprocess
     if not shutil.which("dot"):
-        console.print("  [yellow]⚠[/yellow] 'dot' no encontrado en el PATH. Instalá Graphviz.")
+        console.print("  [yellow]⚠[/yellow] 'dot' no encontrado en el PATH. Instala Graphviz.")
         return
     out = dot_path.replace(".dot", f".{fmt}")
     try:
@@ -199,7 +199,7 @@ def _post_analysis(result, action, project, module,
 
     _offer_plantuml_open(outputs, console, open_plantuml_online, render_plantuml_local)
 
-    if prompts.ask_confirm("¿Querés exportar este análisis ahora?", default=False):
+    if prompts.ask_confirm("¿Quieres exportar este análisis ahora?", default=False):
         mermaid_files = [f for f in outputs if f.endswith(".mmd")]
         ctx = {
             "summary":      result.get("summary", ""),
@@ -299,7 +299,7 @@ def _action_sanity(last_result, deps):
         set_last_project(path)
         ctx = {"summary": result.get("summary", ""),
                "project_name": "sanity", "mermaid_path": None}
-        if prompts.ask_confirm("¿Querés exportar el reporte ahora?", default=False):
+        if prompts.ask_confirm("¿Quieres exportar el reporte ahora?", default=False):
             _handle_export(ctx, prompts, ui, console,
                            to_html, to_pdf, to_markdown, to_zip, PDF_AVAILABLE)
         return ctx

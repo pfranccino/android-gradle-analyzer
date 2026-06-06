@@ -50,7 +50,7 @@ def main_menu() -> str | None:
     Devuelve None si el usuario presiona Esc (→ volver = salir del loop).
     """
     answer = questionary.select(
-        "¿Qué querés hacer?",
+        "¿Qué quieres hacer?",
         choices=MENU_CHOICES,
         style=_STYLE,
         use_shortcuts=False,
@@ -255,7 +255,7 @@ def ask_export_formats(pdf_available: bool = True) -> list[str] | None:
         choices.insert(2, questionary.Choice("PDF  (requiere weasyprint)", value="pdf", checked=False))
 
     answer = questionary.checkbox(
-        "¿En qué formatos querés exportar?",
+        "¿En qué formatos quieres exportar?",
         choices=choices,
         style=_STYLE,
         instruction="(espacio marcar  ↵ confirmar  Esc cancelar)",
@@ -295,7 +295,7 @@ def ask_history_entry(history: list[dict]) -> dict | None:
     choices.append(questionary.Choice("← Volver", value=BACK))
 
     result = questionary.select(
-        "Seleccioná un análisis del historial:",
+        "Selecciona un análisis del historial:",
         choices=choices,
         style=_STYLE,
         use_shortcuts=False,

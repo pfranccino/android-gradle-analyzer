@@ -28,7 +28,7 @@
     <text y="166" fill="#7a7e88">  ↑↓ navegar    ↵ elegir    Esc cancelar / volver    q salir</text>
 
 
-    <text y="206" fill="#d8d4cc"><tspan fill="#5f87ff" font-weight="700">?</tspan> <tspan font-weight="700">¿Qué querés hacer?</tspan>  <tspan fill="#7a7e88">(↑↓ navegar  ↵ elegir  Esc salir)</tspan></text>
+    <text y="206" fill="#d8d4cc"><tspan fill="#5f87ff" font-weight="700">?</tspan> <tspan font-weight="700">¿Qué quieres hacer?</tspan>  <tspan fill="#7a7e88">(↑↓ navegar  ↵ elegir  Esc salir)</tspan></text>
 
 
     <rect x="0" y="218" width="320" height="22" fill="#5f87ff" opacity="0.18"></rect>

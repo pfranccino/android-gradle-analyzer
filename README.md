@@ -448,7 +448,7 @@ externals:
 | `externals` | `output_dir` | `--output-dir` |
 
 **Reglas:**
-- El yml se busca en la ruta que pasás como primer argumento, no en el CWD.
+- El yml se busca en la ruta que pasas como primer argumento, no en el CWD.
 - Los flags de CLI **siempre** ganan sobre el yml.
 - Requiere `pyyaml` (instalación opcional: `pip install android-gradle-analyzer[yaml]`). Si no está instalado, el yml se ignora sin error.
 

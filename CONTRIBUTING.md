@@ -105,13 +105,13 @@ Antes de enviar un PR, prueba con:
 
 ## 🏷️ Proceso de release
 
-1. Actualizá el `CHANGELOG.md` bajo `[Unreleased]` con los cambios del release
-2. Corré el script de bump:
+1. Actualiza el `CHANGELOG.md` bajo `[Unreleased]` con los cambios del release
+2. Ejecuta el script de bump:
    ```bash
    python scripts/bump_version.py 0.2.0
    ```
-3. Revisá el diff generado en `pyproject.toml` y `menu/branding.py`
-4. Commiteá y tageá:
+3. Revisa el diff generado en `pyproject.toml` y `menu/branding.py`
+4. Haz el commit y el tag:
    ```bash
    git add pyproject.toml menu/branding.py CHANGELOG.md
    git commit -m "chore: bump version to v0.2.0"

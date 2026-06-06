@@ -49,7 +49,7 @@ def main():
     _replace(BRANDING,  r'(?m)^(VERSION\s*=\s*)"[^"]+"', f'\\1"{new}"')
 
     print(f"\nCambios aplicados. Próximos pasos:")
-    print(f"  1. Editá CHANGELOG.md con la sección ## [{new}]")
+    print(f"  1. Edita CHANGELOG.md con la sección ## [{new}]")
     print(f"  2. git add pyproject.toml menu/branding.py CHANGELOG.md")
     print(f'  3. git commit -m "chore: bump version to v{new}"')
     print(f"  4. git push")
