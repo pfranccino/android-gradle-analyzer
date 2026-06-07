@@ -192,6 +192,29 @@ def ask_format() -> str | None:
     return answer
 
 
+def ask_engine() -> str | None:
+    """
+    Elige el motor de extracción de dependencias.
+    Devuelve None si el usuario cancela o elige Volver.
+    """
+    answer = questionary.select(
+        "Motor de extracción:",
+        choices=[
+            questionary.Choice("⚡  Estático  (rápido, sin toolchain — default)",        value="static"),
+            questionary.Choice("🎯  Dinámico  (Gradle real, 100% preciso — corre el build)", value="dynamic"),
+            questionary.Choice("🔀  Auto  (dinámico si hay gradlew; si no, estático)",     value="auto"),
+            questionary.Separator(),
+            questionary.Choice("← Volver",                                                value=BACK),
+        ],
+        style=_STYLE,
+        use_shortcuts=False,
+        instruction="(↑↓  ↵ elegir  Esc cancelar)",
+    ).ask()
+    if answer is None or answer == BACK:
+        return None
+    return answer
+
+
 def ask_focus(modules: list[str]) -> str | None:
     """
     Permite elegir un módulo focal o ver todos.

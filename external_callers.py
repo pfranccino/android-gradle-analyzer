@@ -4,23 +4,22 @@ import json
 import argparse
 from pathlib import Path
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
 
 from analyzer_utils import (
-    parse_gradle_file_scoped,
     parse_settings_modules,
     load_config,
     load_project_config,
     get_icon,
     normalize_module_name,
     is_submodule_of,
-    find_gradle_file,
     setup_utf8,
 )
+from dependency_engine import get_engine, EngineError
 
 
 class ExternalCallersAnalyzer:
-    def __init__(self, project_root, target_module, config_path=None, verbose=True):
+    def __init__(self, project_root, target_module, config_path=None, verbose=True,
+                 engine="static"):
         self.project_root   = Path(project_root)
         self.target_module  = target_module
         self.config         = load_config(config_path)
@@ -28,6 +27,8 @@ class ExternalCallersAnalyzer:
         self.all_modules      = []
         self.external_callers = defaultdict(lambda: defaultdict(set))
         self._vprint          = print if verbose else (lambda *a, **k: None)
+        self.engine_name      = engine
+        self.engine           = get_engine(engine, verbose=verbose)
 
     def scan_all_modules(self):
         self._vprint(f"📁 Escaneando proyecto completo: {self.project_root}\n")
@@ -65,25 +66,18 @@ class ExternalCallersAnalyzer:
         return self
 
     def analyze_external_calls(self):
-        self._vprint(f"🔍 Buscando quién llama a '{self.target_module}'...\n")
+        self._vprint(f"🔍 Buscando quién llama a '{self.target_module}' (motor: {self.engine_name})...\n")
 
-        external_modules  = [m for m in self.all_modules if not is_submodule_of(m, self.target_module)]
-        internal_modules  = self.internal_modules
-        project_root      = self.project_root
+        external_modules = [m for m in self.all_modules if not is_submodule_of(m, self.target_module)]
 
-        def _parse_one(module):
-            module_path = project_root / module.replace(':', '/')
-            gradle_file = find_gradle_file(module_path)
-            if gradle_file is None:
-                return module, {}
-            return module, parse_gradle_file_scoped(gradle_file, internal_modules, module)
-
-        with ThreadPoolExecutor() as executor:
-            for module, scoped_deps in executor.map(_parse_one, external_modules):
-                for scope, modules in scoped_deps.items():
-                    for target_submodule in modules:
-                        self.external_callers[module][target_submodule].add(scope)
-                        self._vprint(f"  🔗 {module} → {target_submodule} [{scope}]")
+        resolved = self.engine.resolve(
+            self.project_root, external_modules, self.internal_modules,
+        )
+        for module, scoped_deps in resolved.items():
+            for scope, targets in scoped_deps.items():
+                for target_submodule in targets:
+                    self.external_callers[module][target_submodule].add(scope)
+                    self._vprint(f"  🔗 {module} → {target_submodule} [{scope}]")
 
         total_calls = sum(len(targets) for targets in self.external_callers.values())
         self._vprint(f"\n✓ Análisis completado")
@@ -272,6 +266,8 @@ def main():
                         dest='fmt', metavar='FORMAT')
     parser.add_argument('--output-dir', default=None, dest='output_dir', metavar='DIR')
     parser.add_argument('--config', default=None, metavar='PATH')
+    parser.add_argument('--engine', choices=['static', 'dynamic', 'auto'], default=None,
+                        help='Motor de extracción de dependencias (default: static)')
     parser.add_argument('--quiet', action='store_true')
     parser.add_argument('--json',  action='store_true')
 
@@ -280,6 +276,8 @@ def main():
     proj_cfg = load_project_config(args.project_root).get('externals', {})
     if args.output_dir is None:
         args.output_dir = proj_cfg.get('output_dir', 'external-calls')
+    if args.engine is None:
+        args.engine = proj_cfg.get('engine', 'static')
 
     if not args.quiet:
         print("🚀 Analizador de Llamadas Externas")
@@ -290,9 +288,14 @@ def main():
         target_module=args.target_module,
         config_path=args.config,
         verbose=not args.quiet,
+        engine=args.engine,
     )
-    analyzer.scan_all_modules()
-    analyzer.analyze_external_calls()
+    try:
+        analyzer.scan_all_modules()
+        analyzer.analyze_external_calls()
+    except EngineError as exc:
+        print(f"\n❌ Motor '{args.engine}' falló: {exc}")
+        sys.exit(1)
 
     if not args.quiet:
         print("\n📊 Generando archivos...")

@@ -32,6 +32,7 @@ def run_internal(
     config: str | None = None,
     focus: str | None = None,
     on_progress=None,
+    engine: str = "static",
 ) -> dict:
     """
     Analiza dependencias internas de un módulo Android.
@@ -46,6 +47,7 @@ def run_internal(
             base_path=path,
             config_path=config,
             exclude=exclude or [],
+            engine=engine,
         )
 
         focus_list = [m.strip() for m in focus.split(',')] if focus else None
@@ -81,6 +83,7 @@ def run_external(
     fmt: str = "all",
     output_dir: str = "external-calls",
     config: str | None = None,
+    engine: str = "static",
 ) -> dict:
     """
     Detecta qué módulos externos llaman al módulo dado.
@@ -95,6 +98,7 @@ def run_external(
             project_root=project,
             target_module=module,
             config_path=config,
+            engine=engine,
         )
 
         def _run():
@@ -126,6 +130,7 @@ def run_impact(
     fmt: str = "all",
     output_dir: str = "impact",
     config: str | None = None,
+    engine: str = "static",
 ) -> dict:
     from gradle_impact import ImpactAnalyzer
 
@@ -134,6 +139,7 @@ def run_impact(
             project_root=project,
             target_module=module,
             config_path=config,
+            engine=engine,
         )
 
         def _run():
@@ -161,6 +167,7 @@ def run_sanity(
     path: str,
     output_dir: str = "sanity",
     config: str | None = None,
+    engine: str = "static",
 ) -> dict:
     """
     Calcula métricas de sanidad (Ca/Ce/I, SDP, score 0-100).
@@ -171,7 +178,7 @@ def run_sanity(
     from gradle_sanity import GradleSanityAnalyzer
 
     try:
-        analyzer = GradleSanityAnalyzer(base_path=path, config_path=config)
+        analyzer = GradleSanityAnalyzer(base_path=path, config_path=config, engine=engine)
 
         def _run():
             analyzer.analyze()

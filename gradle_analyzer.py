@@ -4,10 +4,8 @@ import json
 import argparse
 from pathlib import Path
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from analyzer_utils import (
-    parse_gradle_file_scoped,
     parse_settings_modules,
     find_project_root,
     load_config,
@@ -15,10 +13,10 @@ from analyzer_utils import (
     get_icon,
     get_style,
     detect_cycles,
-    find_gradle_file,
     normalize_module_name,
     setup_utf8,
 )
+from dependency_engine import get_engine, EngineError
 
 _COMPILE_SCOPES = {'api', 'implementation', 'compileOnly'}
 _BUILD_SCOPES   = {'kapt', 'annotationProcessor'}
@@ -38,7 +36,8 @@ _DOT_COLORS = {
 
 
 class GradleDependencyAnalyzer:
-    def __init__(self, base_path, config_path=None, exclude=None, verbose=True):
+    def __init__(self, base_path, config_path=None, exclude=None, verbose=True,
+                 engine="static"):
         self.base_path     = Path(base_path).resolve()
         self.config        = load_config(config_path)
         self.exclude       = set(exclude or [])
@@ -47,6 +46,8 @@ class GradleDependencyAnalyzer:
         self.dependencies  = defaultdict(lambda: defaultdict(set))
         self.module_paths  = {}
         self._vprint       = print if verbose else (lambda *a, **k: None)
+        self.engine_name   = engine
+        self.engine        = get_engine(engine, verbose=verbose)
 
     def scan_modules(self):
         self._vprint(f"📁 Escaneando módulos en: {self.base_path}\n")
@@ -103,36 +104,20 @@ class GradleDependencyAnalyzer:
         return self
 
     def analyze_gradle_dependencies(self, on_progress=None):
-        self._vprint("🔍 Analizando archivos Gradle...")
+        self._vprint(f"🔍 Analizando dependencias (motor: {self.engine_name})...")
 
-        known     = self.known_modules
-        base_path = self.base_path
+        resolved = self.engine.resolve(
+            self.base_path, self.modules, self.known_modules, on_progress=on_progress,
+        )
 
-        def _parse_one(module):
-            module_path = base_path / module.replace(':', '/')
-            gradle_file = find_gradle_file(module_path)
-            if gradle_file is None:
-                return module, None
-            return module, parse_gradle_file_scoped(gradle_file, known, module)
-
-        total = len(self.modules)
-        done  = 0
-
-        with ThreadPoolExecutor() as executor:
-            futures = {executor.submit(_parse_one, m): m for m in self.modules}
-            for future in as_completed(futures):
-                module, scoped = future.result()
-                done += 1
-                if on_progress:
-                    on_progress(done, total)
-                if scoped is None:
-                    self._vprint(f"  ⚠️  No se encontró gradle para: {module}")
-                elif scoped:
-                    self.dependencies[module] = scoped
-                    n = sum(len(v) for v in scoped.values())
-                    self._vprint(f"  ✓ {module}: {n} dependencia(s)")
-                else:
-                    self._vprint(f"  ○ {module}: sin dependencias internas")
+        for module in self.modules:
+            scoped = resolved.get(module)
+            if scoped:
+                self.dependencies[module] = scoped
+                n = sum(len(v) for v in scoped.values())
+                self._vprint(f"  ✓ {module}: {n} dependencia(s)")
+            else:
+                self._vprint(f"  ○ {module}: sin dependencias internas")
 
         total_deps = sum(
             len(mods)
@@ -514,6 +499,7 @@ def _build_analyzer(args):
         config_path=args.config,
         exclude=args.exclude,
         verbose=not args.quiet,
+        engine=args.engine,
     )
     analyzer.scan_modules()
     analyzer.analyze_gradle_dependencies()
@@ -532,6 +518,8 @@ def main():
     parser.add_argument('--exclude', action='append', default=[], metavar='MODULE')
     parser.add_argument('--focus',   default=None, metavar='MODULE[,MODULE]')
     parser.add_argument('--config',  default=None, metavar='PATH')
+    parser.add_argument('--engine',  choices=['static', 'dynamic', 'auto'], default=None,
+                        help='Motor de extracción de dependencias (default: static)')
     parser.add_argument('--quiet',   action='store_true')
     parser.add_argument('--json',    action='store_true')
 
@@ -542,12 +530,18 @@ def main():
         args.output_dir = proj_cfg.get('output_dir', 'diagrams')
     if args.fmt is None:
         args.fmt = proj_cfg.get('format', 'all')
+    if args.engine is None:
+        args.engine = proj_cfg.get('engine', 'static')
 
     if not args.quiet:
         print("🚀 Analizador de Dependencias via Gradle")
         print("=" * 70)
 
-    analyzer, focus = _build_analyzer(args)
+    try:
+        analyzer, focus = _build_analyzer(args)
+    except EngineError as exc:
+        print(f"\n❌ Motor '{args.engine}' falló: {exc}")
+        sys.exit(1)
 
     if not args.quiet:
         print("\n📊 Generando archivos...")

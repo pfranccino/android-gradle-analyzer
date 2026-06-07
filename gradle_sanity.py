@@ -22,6 +22,7 @@ from pathlib import Path
 from collections import defaultdict
 
 from gradle_analyzer import GradleDependencyAnalyzer
+from dependency_engine import EngineError
 from analyzer_utils import load_config, load_project_config, _strip_comments
 
 
@@ -33,13 +34,14 @@ _HARDCODED_VERSION_RE = re.compile(
 
 
 class GradleSanityAnalyzer:
-    def __init__(self, base_path, config_path=None, verbose=True):
+    def __init__(self, base_path, config_path=None, verbose=True, engine="static"):
         self.base_path = Path(base_path)
         self.config    = load_config(config_path)
         self.weights   = self.config.get("sanity_weights", {})
         self._vprint   = print if verbose else (lambda *a, **k: None)
 
-        self._dep = GradleDependencyAnalyzer(base_path, config_path, verbose=verbose)
+        self._dep = GradleDependencyAnalyzer(base_path, config_path, verbose=verbose,
+                                             engine=engine)
 
         self.ca          = {}
         self.ce          = {}
@@ -564,6 +566,8 @@ def main():
     parser.add_argument('path')
     parser.add_argument('--output-dir', default=None, dest='output_dir', metavar='DIR')
     parser.add_argument('--config',     default=None, metavar='PATH')
+    parser.add_argument('--engine',     choices=['static', 'dynamic', 'auto'], default=None,
+                        help='Motor de extracción de dependencias (default: static)')
     parser.add_argument('--quiet',      action='store_true')
     parser.add_argument('--json',       action='store_true')
     parser.add_argument('--fail-on-cycle',       action='store_const', const=True, default=None, dest='fail_on_cycle')
@@ -574,6 +578,8 @@ def main():
     proj_cfg = load_project_config(args.path).get('sanity', {})
     if args.output_dir is None:
         args.output_dir = proj_cfg.get('output_dir', 'sanity')
+    if args.engine is None:
+        args.engine = proj_cfg.get('engine', 'static')
     if args.fail_on_cycle is None:
         args.fail_on_cycle = bool(proj_cfg.get('fail_on_cycle', False))
     if args.fail_below is None:
@@ -587,8 +593,13 @@ def main():
         base_path=args.path,
         config_path=args.config,
         verbose=not args.quiet,
+        engine=args.engine,
     )
-    analyzer.analyze()
+    try:
+        analyzer.analyze()
+    except EngineError as exc:
+        print(f"\n❌ Motor '{args.engine}' falló: {exc}")
+        sys.exit(1)
     analyzer.save_report(output_dir=args.output_dir)
 
     if args.json:
