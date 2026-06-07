@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-06-07
+
+### Fixed
+- **Falsos positivos en `.gradle.kts` sin tree-sitter**: el fallback de regex para Kotlin DSL no eliminaba comentarios, por lo que dependencias comentadas (`// implementation(project(":x"))` o bloques `/* ... */`) se reportaban como llamadas reales en el análisis de dependencias y en la búsqueda de llamadas externas. Ahora el fallback aplica `_strip_comments`, consistente con el path Groovy (`_preprocess_groovy`) y el de accessors. Afecta solo a la instalación por defecto (sin el extra `kts`); con `tree-sitter-kotlin` instalado el comportamiento ya era correcto
+- Nueva clase de test `TestKtsRegexFallback`: fuerza el camino sin tree-sitter (parchando `_parse_kts_project_calls`) para cubrir esta regresión siempre. Los tests previos de comentarios en KTS se saltaban cuando tree-sitter no estaba instalado — justo el escenario donde vivía el bug
+
 ## [1.3.1] - 2026-06-06
 
 ### Changed
