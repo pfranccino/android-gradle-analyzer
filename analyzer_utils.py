@@ -401,6 +401,10 @@ def parse_gradle_file_scoped(gradle_file, known_modules, self_module):
         content = gradle_file.read_text(encoding='utf-8')
         if not is_kts:
             content = _preprocess_groovy(content)
+        else:
+            # KTS sin tree-sitter: al menos quitar comentarios para no contar
+            # dependencias comentadas como llamadas reales (falsos positivos).
+            content = _strip_comments(content)
 
         for scope, patterns in DEPENDENCY_SCOPES.items():
             for pattern in patterns:
