@@ -19,14 +19,17 @@ Herramientas para **analizar, visualizar y medir la salud** de las dependencias 
 ## ⚡ Quick start
 
 ```bash
-# Recomendado · instalación global con pipx (última versión)
-pipx install git+https://github.com/pfranccino/android-gradle-analyzer.git
+# Recomendado · instalación global con pipx desde PyPI
+pipx install android-gradle-analyzer
 
 # Con parser AST para .gradle.kts (maneja multilínea y comentarios correctamente)
 pipx install "android-gradle-analyzer[kts]"
 
 # Versión específica
-pipx install git+https://github.com/pfranccino/android-gradle-analyzer.git@v1.0.0
+pipx install android-gradle-analyzer==1.3.0
+
+# Última versión de desarrollo (sin esperar al release en PyPI)
+pipx install git+https://github.com/pfranccino/android-gradle-analyzer.git
 
 # Ver versión instalada
 gradle-analyzer-menu --version
@@ -55,8 +58,8 @@ gradle-impact /ruta/a/tu/proyecto payments:common
 ```bash
 git clone https://github.com/pfranccino/android-gradle-analyzer.git
 cd android-gradle-analyzer
-pip install -r requirements.txt
-python3 gradle_analyzer.py /ruta/a/tu/proyecto/payments
+pip install -e ".[kts,yaml]"
+gradle-analyzer /ruta/a/tu/proyecto/payments
 ```
 
 </details>
@@ -494,8 +497,7 @@ android-gradle-analyzer/
 ├── CHANGELOG.md
 ├── LICENSE
 ├── CONTRIBUTING.md
-├── pyproject.toml               ← instalación via pipx
-├── requirements.txt             ← uso directo (git clone)
+├── pyproject.toml               ← fuente única de dependencias (pipx · pip install -e .)
 ├── menu.py                      ← wrapper: python3 menu.py
 ├── menu/                        ← paquete del menú interactivo
 │   ├── actions.py
@@ -573,7 +575,7 @@ Sube los valores de espaciado (ver sección anterior).
 Para archivos `.kts`, instala el parser AST: `pip install tree-sitter tree-sitter-kotlin`. Para `.gradle`, el preprocesador ya maneja multilínea y comentarios. Si el problema persiste, revisa los patrones en `analyzer_utils.py` (constante `DEPENDENCY_SCOPES`).
 
 **El menú no arranca tras clonar**
-Instala las dependencias: `pip install -r requirements.txt`
+Instala el paquete en modo editable: `pip install -e .`
 
 </details>
 

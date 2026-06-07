@@ -111,13 +111,15 @@ Antes de enviar un PR, prueba con:
    python scripts/bump_version.py 0.2.0
    ```
 3. Revisa el diff generado en `pyproject.toml` y `menu/branding.py`
-4. Haz el commit y el tag:
+4. Commitea y haz push a `main` — el workflow se encarga del resto:
    ```bash
    git add pyproject.toml menu/branding.py CHANGELOG.md
    git commit -m "chore: bump version to v0.2.0"
-   git tag v0.2.0
-   git push && git push --tags
+   git push
    ```
+   El CI crea el tag `v0.2.0`, publica el GitHub Release y sube el paquete a PyPI
+   (vía Trusted Publisher / OIDC) automáticamente. **No crees el tag a mano:** si el
+   tag ya existe, el workflow lo detecta y se salta el release y el publish.
 
 ## 💡 Ideas para Contribuir
 
