@@ -52,6 +52,7 @@ build-backend = "hatchling.build"
 include = [
   "menu/",
   "analyzer_utils.py",
+  "dependency_engine.py",
   "gradle_analyzer.py",
   "external_callers.py",
   "gradle_sanity.py",
