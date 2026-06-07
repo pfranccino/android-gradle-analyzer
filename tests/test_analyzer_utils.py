@@ -431,3 +431,64 @@ class TestKtsTreeSitter:
             deps   = {d for v in result.values() for d in v}
             assert "core"          in deps
             assert "payments:core" not in deps
+
+
+# ── KTS fallback regex (sin tree-sitter) ──────────────────────────────────────
+
+class TestKtsRegexFallback:
+    """
+    Cubre el parsing de .gradle.kts cuando tree-sitter NO está disponible.
+    Es el camino por defecto (tree-sitter es un extra opcional), así que estos
+    tests fuerzan el fallback parchando _parse_kts_project_calls a None para
+    correr siempre, independientemente de si tree-sitter está instalado.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _force_regex_fallback(self, monkeypatch):
+        monkeypatch.setattr(
+            "analyzer_utils._parse_kts_project_calls",
+            lambda *a, **k: None,
+        )
+
+    def test_line_comment_ignored(self):
+        """// implementation(project(':core')) no debe contar como dependencia."""
+        gradle_file = FIXTURES / "kts_commented" / "app" / "build.gradle.kts"
+        known    = ["app", "core", "shared", "network"]
+        result   = parse_gradle_file_scoped(gradle_file, known, "app")
+        all_deps = {dep for deps in result.values() for dep in deps}
+
+        assert "core" not in all_deps
+
+    def test_block_comment_ignored(self):
+        """/* api(project(':shared')) */ no debe contar como dependencia."""
+        gradle_file = FIXTURES / "kts_commented" / "app" / "build.gradle.kts"
+        known    = ["app", "core", "shared", "network"]
+        result   = parse_gradle_file_scoped(gradle_file, known, "app")
+        all_deps = {dep for deps in result.values() for dep in deps}
+
+        assert "shared" not in all_deps
+
+    def test_real_dep_detected(self):
+        """La única dep real (no comentada) sí aparece vía regex fallback."""
+        gradle_file = FIXTURES / "kts_commented" / "app" / "build.gradle.kts"
+        known  = ["app", "core", "shared", "network"]
+        result = parse_gradle_file_scoped(gradle_file, known, "app")
+
+        assert "network" in result.get("implementation", set())
+
+    def test_commented_accessor_ignored(self):
+        """// implementation(projects.target.secret) no debe contar (accessor comentado)."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            g = Path(tmp) / "build.gradle.kts"
+            g.write_text(
+                "dependencies {\n"
+                "    implementation(projects.target.common)\n"
+                "    // implementation(projects.target.secret)\n"
+                "}\n"
+            )
+            known  = ["target:common", "target:secret"]
+            result = parse_gradle_file_scoped(g, known, "caller")
+            deps   = {d for v in result.values() for d in v}
+            assert "target:common" in deps
+            assert "target:secret" not in deps
