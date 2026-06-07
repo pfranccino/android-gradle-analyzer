@@ -105,21 +105,30 @@ Antes de enviar un PR, prueba con:
 
 ## 🏷️ Proceso de release
 
-1. Actualiza el `CHANGELOG.md` bajo `[Unreleased]` con los cambios del release
-2. Ejecuta el script de bump:
+`main` está protegida: los cambios entran por **Pull Request** y los tests deben pasar
+antes de poder mergear. El release y el publish son automáticos, con un control manual
+final antes de subir a PyPI.
+
+1. Actualiza el `CHANGELOG.md` con la sección `## [X.Y.Z]` del release
+2. Crea una rama y ejecuta el bump:
    ```bash
-   python scripts/bump_version.py 0.2.0
+   git checkout -b release/vX.Y.Z
+   python scripts/bump_version.py X.Y.Z
    ```
-3. Revisa el diff generado en `pyproject.toml` y `menu/branding.py`
-4. Commitea y haz push a `main` — el workflow se encarga del resto:
+3. Revisa el diff en `pyproject.toml` y `menu/branding.py`, commitea y abre el PR:
    ```bash
    git add pyproject.toml menu/branding.py CHANGELOG.md
-   git commit -m "chore: bump version to v0.2.0"
-   git push
+   git commit -m "chore: bump version to vX.Y.Z"
+   git push -u origin release/vX.Y.Z
+   gh pr create --fill
    ```
-   El CI crea el tag `v0.2.0`, publica el GitHub Release y sube el paquete a PyPI
-   (vía Trusted Publisher / OIDC) automáticamente. **No crees el tag a mano:** si el
-   tag ya existe, el workflow lo detecta y se salta el release y el publish.
+4. Cuando los tests del PR pasen en verde, **mergea el PR**. El CI crea el tag `vX.Y.Z`,
+   publica el GitHub Release y deja el job `publish-pypi` **en espera de aprobación**.
+5. Ve a la pestaña **Actions** → el run pausado → **Review deployments** → aprueba el
+   environment `pypi`. Recién ahí se sube el paquete a PyPI.
+
+> **No crees el tag a mano:** si el tag ya existe, el workflow se salta el release y el
+> publish. El tag lo crea el CI tras el merge.
 
 ## 💡 Ideas para Contribuir
 
