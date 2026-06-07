@@ -5,6 +5,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-06-07
+
+### Added
+- **Motor dinámico de extracción de dependencias** (`--engine dynamic`): ejecuta `gradlew -I <init script>` y lee las dependencias `project(...)` que **Gradle resuelve** del modelo de proyecto, en vez de parsear texto. Precisión total: soporta Version Catalogs, variables, accessors type-safe y convention plugins sin actualizar el parser. Extrae dependencias **declaradas directas** por configuración (no resuelve el grafo transitivo), por lo que no necesita red ni compilar
+- **Modo `--engine auto`**: usa el motor dinámico si hay wrapper de Gradle (`gradlew`) y la corrida tiene éxito; si no está disponible o falla, cae al motor estático con una advertencia. Mismo patrón de fallback que tree-sitter/regex
+- Nuevo módulo `dependency_engine.py` con `StaticEngine` / `DynamicEngine` / `AutoEngine` detrás de una interfaz común `resolve(project_root, modules, known_modules)`. Los cuatro análisis (`gradle-analyzer`, `gradle-impact`, `gradle-externals`, `gradle-sanity`) aceptan `--engine static|dynamic|auto` (default `static`), configurable también por `analyzer.yml` (`engine:` por sección)
+- El menú interactivo incluye un paso de selección de motor en cada análisis
+- Nueva clase de test `TestDependencyEngine*` (18 tests): paridad del estático, normalización/filtrado del JSON dinámico, detección del wrapper y fallback de auto
+
+### Changed
+- Los tres analizadores (`gradle_analyzer`, `gradle_impact`, `external_callers`) y `gradle_sanity` delegan ahora la extracción de dependencias en `dependency_engine` en lugar de llamar a `parse_gradle_file_scoped` directamente. El motor estático reproduce el comportamiento previo byte a byte (sin regresión: 89 tests existentes en verde)
+
+### Security
+- El motor dinámico **ejecuta el build del proyecto analizado** (settings, plugins, convention plugins). Es opt-in (`static` sigue siendo el default) y solo debe usarse sobre repos de confianza. El motor estático solo lee texto y es seguro para repos no confiables
+
 ## [1.3.2] - 2026-06-07
 
 ### Fixed

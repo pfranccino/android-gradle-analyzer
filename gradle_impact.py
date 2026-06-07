@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
+import sys
 import json
 import argparse
 from pathlib import Path
 from collections import defaultdict, deque
-from concurrent.futures import ThreadPoolExecutor
 
 from analyzer_utils import (
-    parse_gradle_file_scoped,
     parse_settings_modules,
     load_config,
     load_project_config,
     get_icon,
     normalize_module_name,
-    find_gradle_file,
     setup_utf8,
 )
+from dependency_engine import get_engine, EngineError
 
 
 class ImpactAnalyzer:
-    def __init__(self, project_root, target_module, config_path=None, verbose=True):
+    def __init__(self, project_root, target_module, config_path=None, verbose=True,
+                 engine="static"):
         self.project_root  = Path(project_root)
         self.target_module = target_module
         self.config        = load_config(config_path)
@@ -26,6 +26,8 @@ class ImpactAnalyzer:
         self.reverse_graph = defaultdict(set)
         self.impacted      = {}
         self._vprint       = print if verbose else (lambda *a, **k: None)
+        self.engine_name   = engine
+        self.engine        = get_engine(engine, verbose=verbose)
 
     def scan_and_build_graph(self):
         self._vprint(f"📁 Escaneando proyecto: {self.project_root}\n")
@@ -47,23 +49,15 @@ class ImpactAnalyzer:
                     continue
 
         self._vprint(f"✓ {len(self.all_modules)} módulos encontrados\n")
-        self._vprint("🔍 Construyendo grafo invertido de dependencias...")
+        self._vprint(f"🔍 Construyendo grafo invertido (motor: {self.engine_name})...")
 
-        all_modules  = self.all_modules
-        project_root = self.project_root
-
-        def _parse_one(module):
-            module_path = project_root / module.replace(":", "/")
-            gradle_file = find_gradle_file(module_path)
-            if gradle_file is None:
-                return module, {}
-            return module, parse_gradle_file_scoped(gradle_file, all_modules, module)
-
-        with ThreadPoolExecutor() as executor:
-            for module, scoped in executor.map(_parse_one, all_modules):
-                for scope_deps in scoped.values():
-                    for dep in scope_deps:
-                        self.reverse_graph[dep].add(module)
+        resolved = self.engine.resolve(
+            self.project_root, self.all_modules, self.all_modules,
+        )
+        for module, scoped in resolved.items():
+            for scope_deps in scoped.values():
+                for dep in scope_deps:
+                    self.reverse_graph[dep].add(module)
 
         return self
 
@@ -232,6 +226,8 @@ def main():
                         dest="fmt", metavar="FORMAT")
     parser.add_argument("--output-dir", default=None, dest="output_dir", metavar="DIR")
     parser.add_argument("--config",     default=None, metavar="PATH")
+    parser.add_argument("--engine",     choices=["static", "dynamic", "auto"], default=None,
+                        help="Motor de extracción de dependencias (default: static)")
     parser.add_argument("--quiet",      action="store_true")
     parser.add_argument("--json",       action="store_true")
 
@@ -242,6 +238,8 @@ def main():
         args.target_module = proj_cfg.get('default_module')
     if args.output_dir is None:
         args.output_dir = proj_cfg.get('output_dir', 'impact')
+    if args.engine is None:
+        args.engine = proj_cfg.get('engine', 'static')
     if args.target_module is None:
         parser.error("Se requiere target_module como argumento o impact.default_module en analyzer.yml")
 
@@ -254,8 +252,13 @@ def main():
         target_module=args.target_module,
         config_path=args.config,
         verbose=not args.quiet,
+        engine=args.engine,
     )
-    analyzer.scan_and_build_graph()
+    try:
+        analyzer.scan_and_build_graph()
+    except EngineError as exc:
+        print(f"\n❌ Motor '{args.engine}' falló: {exc}")
+        sys.exit(1)
     analyzer.compute_impact()
 
     if not args.quiet:

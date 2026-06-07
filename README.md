@@ -131,6 +131,7 @@ Dado un módulo, muestra qué otros módulos se romperían si cambia (BFS sobre 
 - 📋 **`settings.gradle.kts` / `settings.gradle`** — si existe, se usa como fuente de verdad para los módulos
 - 🎯 **Type-safe project accessors** (`projects.foo.barBaz`, Gradle 7+) soportados junto al formato clásico `project(":foo:bar")`
 - 🌳 **Parser AST para `.kts`** (opcional) — usa tree-sitter-kotlin para manejar dependencias multilínea y comentados correctamente
+- 🎯 **Motor dinámico vía Gradle** (opcional, `--engine dynamic`) — lee la verdad que Gradle resuelve del proyecto: precisión total con Version Catalogs, variables y convention plugins (ver abajo)
 - 🎨 **Colores por tipo** (common, gateway, features)
 - ⚠️ **Detección automática de ciclos**
 - 🍃 **Lógica compartida mal ubicada** — detecta una hoja (feature/app) de la que otros dependen, sin depender de nombres ni plugins
@@ -139,6 +140,32 @@ Dado un módulo, muestra qué otros módulos se romperían si cambia (BFS sobre 
 - 🤫 **`--quiet`** en todos los CLIs para suprimir output de progreso
 - 📄 **`--json`** en todos los CLIs para salida JSON (ideal para CI/CD)
 - 🚦 **`--fail-on-cycle` / `--fail-on-score-below N`** en `gradle-sanity` para integración con CI
+
+---
+
+## 🧠 Motor de extracción: estático vs dinámico
+
+Todos los análisis aceptan `--engine static|dynamic|auto` (default `static`).
+
+| | **static** (default) | **dynamic** | **auto** |
+|---|---|---|---|
+| Cómo obtiene las dependencias | Parsea `build.gradle(.kts)` con regex/tree-sitter | Ejecuta `gradlew -I <init script>` y lee lo que Gradle resuelve | Dynamic si hay `gradlew` y configura; si no, static |
+| Precisión | Alta para `project(...)` y accessors | **Total** (Version Catalogs, variables, convention plugins) | La mejor disponible |
+| Requisitos | Ninguno (Python puro) | JDK + wrapper de Gradle en la raíz | — |
+| Velocidad | Instantánea | Depende de la configuración del build | — |
+| Seguridad | Solo lee texto (seguro en repos no confiables) | **Ejecuta el build del proyecto** | Solo ejecuta si hay wrapper |
+
+```bash
+# Verdad absoluta vía Gradle
+gradle-externals /ruta/proyecto payments --engine dynamic
+
+# Dinámico cuando se puede, estático como red de seguridad
+gradle-analyzer /ruta/proyecto/app --engine auto
+```
+
+> ⚠️ **Seguridad:** `--engine dynamic` ejecuta el build del proyecto analizado (settings, plugins, convention plugins). Úsalo solo sobre repos de confianza. El motor `static` (default) nunca ejecuta nada: solo lee texto.
+
+El motor dinámico extrae **dependencias declaradas directas** por configuración (el equivalente fiel de lo que extrae el parser estático), por lo que **no resuelve el grafo transitivo** ni necesita red o compilar — solo configura el build.
 
 ---
 
@@ -155,6 +182,7 @@ gradle-analyzer <ruta_al_modulo>
 |---|---|---|
 | `--format plantuml\|mermaid\|all` | Formato de salida | `all` |
 | `--output-dir <dir>` | Directorio de salida | `diagrams` |
+| `--engine static\|dynamic\|auto` | Motor de extracción de dependencias | `static` |
 | `--exclude <module>` | Excluir un módulo (puede repetirse) | — |
 | `--config <path>` | Ruta a `analyzer_config.json` personalizado | auto-detect |
 | `--quiet` | Suprime output de progreso | off |
@@ -191,6 +219,7 @@ gradle-externals <ruta_proyecto> <nombre_modulo>
 |---|---|---|
 | `--format plantuml\|mermaid\|all` | Formato de salida | `all` |
 | `--output-dir <dir>` | Directorio de salida | `external-calls` |
+| `--engine static\|dynamic\|auto` | Motor de extracción de dependencias | `static` |
 | `--config <path>` | Config personalizado | auto-detect |
 | `--quiet` | Suprime output de progreso | off |
 | `--json` | Salida JSON a stdout | off |
@@ -212,6 +241,7 @@ gradle-sanity <ruta_al_modulo>
 | Flag | Descripción | Default |
 |---|---|---|
 | `--output-dir <dir>` | Directorio de salida | `sanity` |
+| `--engine static\|dynamic\|auto` | Motor de extracción de dependencias | `static` |
 | `--config <path>` | Config personalizado | auto-detect |
 | `--quiet` | Suprime output de progreso | off |
 | `--json` | Salida JSON a stdout | off |
@@ -283,6 +313,7 @@ Construye el grafo invertido de dependencias y hace BFS desde el módulo target,
 |---|---|---|
 | `--format plantuml\|mermaid\|all` | Formato de salida | `all` |
 | `--output-dir <dir>` | Directorio de salida | `impact` |
+| `--engine static\|dynamic\|auto` | Motor de extracción de dependencias | `static` |
 | `--config <path>` | Config personalizado | auto-detect |
 | `--quiet` | Suprime output de progreso | off |
 | `--json` | Salida JSON a stdout | off |
@@ -432,6 +463,7 @@ impact:
 analyzer:
   output_dir: reports/diagrams
   format: mermaid
+  engine: auto
 
 externals:
   output_dir: reports/external-calls
@@ -444,11 +476,15 @@ externals:
 | `sanity` | `fail_on_cycle` | `--fail-on-cycle` |
 | `sanity` | `fail_on_score_below` | `--fail-on-score-below N` |
 | `sanity` | `output_dir` | `--output-dir` |
+| `sanity` | `engine` | `--engine` |
 | `impact` | `default_module` | segundo argumento posicional |
 | `impact` | `output_dir` | `--output-dir` |
+| `impact` | `engine` | `--engine` |
 | `analyzer` | `output_dir` | `--output-dir` |
 | `analyzer` | `format` | `--format` |
+| `analyzer` | `engine` | `--engine` |
 | `externals` | `output_dir` | `--output-dir` |
+| `externals` | `engine` | `--engine` |
 
 **Reglas:**
 - El yml se busca en la ruta que pasas como primer argumento, no en el CWD.

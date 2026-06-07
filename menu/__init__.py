@@ -237,6 +237,10 @@ def _action_internal(last_result, deps):
         return last_result
     focus = focus_answer
 
+    engine = prompts.ask_engine()
+    if not engine:
+        return last_result
+
     progress_label = (
         f"Analizando '{focus}'..." if focus else "Analizando dependencias internas..."
     )
@@ -244,7 +248,7 @@ def _action_internal(last_result, deps):
     with ui.analysis_progress(progress_label, n_modules) as on_progress:
         result = actions.run_internal(
             path=path, fmt=fmt, output_dir="diagrams",
-            focus=focus, on_progress=on_progress,
+            focus=focus, on_progress=on_progress, engine=engine,
         )
 
     ctx = _post_analysis(result, "internal", path, focus,
@@ -269,9 +273,12 @@ def _action_external(last_result, deps):
     fmt = prompts.ask_format()
     if not fmt:
         return last_result
+    engine = prompts.ask_engine()
+    if not engine:
+        return last_result
     with ui.analysis_spinner(f"Buscando llamadas externas a '{module}'..."):
         result = actions.run_external(project=path, module=module, fmt=fmt,
-                                      output_dir="external-calls")
+                                      output_dir="external-calls", engine=engine)
     ctx = _post_analysis(result, "external", path, module,
                          ui, prompts, console, add_history_entry,
                          set_last_project, set_last_module,
@@ -288,8 +295,11 @@ def _action_sanity(last_result, deps):
     path, _ = _get_project_and_modules(prompts, list_modules)
     if not path:
         return last_result
+    engine = prompts.ask_engine()
+    if not engine:
+        return last_result
     with ui.analysis_spinner("Calculando métricas de sanidad..."):
-        result = actions.run_sanity(path=path, output_dir="sanity")
+        result = actions.run_sanity(path=path, output_dir="sanity", engine=engine)
     if result["ok"]:
         outputs = result.get("outputs", [])
         ui.print_outputs_panel(outputs)
@@ -322,9 +332,12 @@ def _action_impact(last_result, deps):
     fmt = prompts.ask_format()
     if not fmt:
         return last_result
+    engine = prompts.ask_engine()
+    if not engine:
+        return last_result
     with ui.analysis_spinner(f"Calculando impacto de '{module}'..."):
         result = actions.run_impact(project=path, module=module, fmt=fmt,
-                                    output_dir="impact")
+                                    output_dir="impact", engine=engine)
     ctx = _post_analysis(result, "impact", path, module,
                          ui, prompts, console, add_history_entry,
                          set_last_project, set_last_module,
