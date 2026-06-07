@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+- **Documentación**: README reescrito y reducido (~270 líneas) con salida **real** de los CLIs y un diagrama Mermaid que GitHub renderiza en vivo. El detalle (referencia de comandos, métricas de sanidad, motores, configuración, CI, internals y troubleshooting) se movió al [Wiki](https://github.com/pfranccino/android-gradle-analyzer/wiki) como única fuente de verdad. `EXAMPLES.md` actualizado a los CLIs actuales con salida real y reproducible contra `tests/fixtures/`
+
+### Removed
+- Imágenes `docs/preview.svg` y `docs/preview-menu.svg` (maquetas dibujadas a mano y desactualizadas; reemplazadas por salida real y Mermaid en vivo en el README)
+
 ## [1.4.0] - 2026-06-07
 
 ### Added
