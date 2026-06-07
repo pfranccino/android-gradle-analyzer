@@ -5,6 +5,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-06-06
+
+### Changed
+- **Distribución por PyPI**: la herramienta ahora se instala con `pipx install android-gradle-analyzer` (antes solo `git+https://...`). El install desde `git+` se mantiene documentado como vía de desarrollo
+- README y CONTRIBUTING actualizados: el flujo de desarrollo usa `pip install -e ".[kts,yaml]"` y el de release ya no crea el tag a mano (lo hace el CI)
+
+### Added
+- **Publicación automática a PyPI** vía Trusted Publishers (OIDC) en `release.yml`: el job `publish-pypi` sube el paquete sin tokens ni contraseñas, gateado a que el job `release` haya creado un tag nuevo (no publica en pushes sin bump de versión)
+
+### Removed
+- `setup.sh` y `requirements.txt`: `pyproject.toml` queda como fuente única de dependencias
+
 ## [1.3.0] - 2026-06-06
 
 ### Added
