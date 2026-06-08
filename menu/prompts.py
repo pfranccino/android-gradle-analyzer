@@ -270,8 +270,6 @@ def ask_depth(question: str = "Profundidad del árbol (niveles de 'internas de s
         choices=[
             questionary.Choice("Todas  (recursivo hasta las hojas)", value="all"),
             questionary.Choice("1  (solo dependencias directas)",    value="1"),
-            questionary.Choice("2",                                  value="2"),
-            questionary.Choice("3",                                  value="3"),
             questionary.Separator(),
             questionary.Choice("← Volver",                           value=BACK),
         ],

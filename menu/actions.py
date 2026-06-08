@@ -64,7 +64,7 @@ def run_internal(
         output_path = Path(output_dir)
         outputs = [str(f) for f in output_path.iterdir() if f.is_file()] if output_path.exists() else []
 
-        summary = analyzer.generate_report()
+        summary = analyzer.generate_report(focus_list)
         cycles  = analyzer.detect_dependency_cycles()
 
         return {
