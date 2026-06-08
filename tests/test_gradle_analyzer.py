@@ -86,16 +86,16 @@ class TestGradleDependencyAnalyzer:
         assert "app" in focused
         assert "core" in focused
 
-    def test_focus_includes_direct_callers(self):
-        """Vista enfocada "en contexto": enfocar en core incluye a su llamador app
-        (app depende de core), para mostrar el módulo con quién lo usa."""
+    def test_focus_excludes_callers(self):
+        """Modelo árbol-raíz: enfocar en core (hoja) da SOLO core; su llamador app
+        NO entra a la vista de internas ("quién me llama" es Llamadas externas)."""
         analyzer = GradleDependencyAnalyzer(base_path=str(FIXTURES / "simple"))
         analyzer.scan_modules()
         analyzer.analyze_gradle_dependencies()
 
         focused = analyzer._focused_modules(["core"])
         assert "core" in focused
-        assert "app" in focused   # llamador directo de core
+        assert "app" not in focused   # app llama a core; es llamador, no dependencia
 
     def test_resolves_type_safe_accessors_end_to_end(self):
         """
@@ -154,15 +154,17 @@ class TestSubtreeAnalysis:
         # Y como el grafo es completo, también se ve que 'app' (fuera del subárbol) lo usa
         assert "grp:sub-a" in a.dependencies["app"].get("implementation", set())
 
-    def test_subtree_focused_view_includes_callers(self, tmp_path):
-        """La vista enfocada del subárbol incluye a sus llamadores directos (app)."""
+    def test_subtree_focused_view_is_downstream_only(self, tmp_path):
+        """La vista enfocada del subárbol es la clausura hacia abajo: lo que usa,
+        sin sus llamadores. `app` (que llama a grp:sub-a) NO entra a la vista."""
         self._make_project(tmp_path)
         a = GradleDependencyAnalyzer(base_path=str(tmp_path / "grp"), verbose=False)
         a.scan_modules()
         a.analyze_gradle_dependencies()
         view = a._focused_modules(a.focus_modules)
-        assert "app" in view          # llamador directo de grp:sub-a
-        assert "view" in view         # dependencia de grp:sub-a
+        assert "app" not in view      # llamador, no dependencia
+        assert "view" in view         # dependencia (downstream) de grp:sub-a
+        assert "pin" in view          # dependencia (downstream) de grp:sub-a
 
     def test_root_analysis_unchanged(self, tmp_path):
         """Analizar la raíz completa: modules = todos, foco = todos (sin zoom)."""
@@ -171,6 +173,69 @@ class TestSubtreeAnalysis:
         a.scan_modules()
         assert set(a.modules) == {"app", "view", "pin", "grp:sub-a", "grp:sub-b"}
         assert a._effective_focus() is None   # raíz → sin foco
+
+
+class TestRootedInternalTree:
+    """Modelo árbol-raíz para Dependencias internas: el módulo elegido es la raíz;
+    la vista es su clausura hacia abajo (lo que usa, recursivo), sin llamadores."""
+
+    def _make_chain(self, root: Path):
+        """app → a → b → c → d ; a → c (api) ; app → noise (no relacionado al foco)."""
+        (root / "settings.gradle").write_text(
+            "include ':app'\ninclude ':a'\ninclude ':b'\ninclude ':c'\n"
+            "include ':d'\ninclude ':noise'\n", encoding="utf-8")
+
+        def mod(path, body):
+            d = root / path
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "build.gradle").write_text(body, encoding="utf-8")
+
+        mod("app",   "dependencies { implementation project(':a'); implementation project(':noise') }")
+        mod("a",     "dependencies { implementation project(':b'); api project(':c') }")
+        mod("b",     "dependencies { implementation project(':c') }")
+        mod("c",     "dependencies { implementation project(':d') }")
+        mod("d",     "dependencies {}")
+        mod("noise", "dependencies {}")
+
+    def _analyzer(self, root, depth=None):
+        a = GradleDependencyAnalyzer(base_path=str(root), verbose=False, depth=depth)
+        a.scan_modules()
+        a.analyze_gradle_dependencies()
+        return a
+
+    def test_no_caller_leak(self, tmp_path):
+        """Bug reportado: enfocar `a` no arrastra a `app` ni a `noise` (deps del
+        llamador ajenas al foco)."""
+        self._make_chain(tmp_path)
+        a = self._analyzer(tmp_path)
+        view = set(a._focused_modules(["a"]))
+        assert view == {"a", "b", "c", "d"}
+        assert "app" not in view
+        assert "noise" not in view
+
+    def test_depth_one_direct_only(self, tmp_path):
+        self._make_chain(tmp_path)
+        a = self._analyzer(tmp_path, depth=1)
+        assert set(a._focused_modules(["a"])) == {"a", "b", "c"}   # solo directas
+
+    def test_depth_two_reaches_grandchildren(self, tmp_path):
+        self._make_chain(tmp_path)
+        a = self._analyzer(tmp_path, depth=2)
+        assert set(a._focused_modules(["a"])) == {"a", "b", "c", "d"}
+
+    def test_ascii_tree_is_nested(self, tmp_path):
+        self._make_chain(tmp_path)
+        a = self._analyzer(tmp_path)
+        out = a.generate_ascii(focus=["a"])
+        assert "📦 a" in out
+        assert "│   └── 📦 c" in out      # c anidado bajo b (continuación con │)
+        assert "noise" not in out          # ajeno al foco, no aparece
+
+    def test_ascii_dedup_marks_repeat(self, tmp_path):
+        self._make_chain(tmp_path)
+        a = self._analyzer(tmp_path)
+        out = a.generate_ascii(focus=["a"])
+        assert "↩" in out   # c llega por b y por api; la 2da aparición se marca
 
 
 class TestFindGradleFile:

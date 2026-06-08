@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+- **Dependencias internas ahora es un árbol enraizado en el módulo elegido.** Al enfocar un módulo (ej. `customer:customer-account-recovery`) la salida muestra **solo lo que ese módulo usa, recursivamente** (clausura hacia abajo), en vez de incluir a sus llamadores y volcar toda la lista de dependencias de `app`. "Quién me llama" pasa a ser exclusivamente la función de Llamadas externas. Como el conjunto es cerrado bajo "depende de", la vista nunca arrastra módulos ajenos al foco
+- El reporte ASCII de internas se renderiza como **árbol anidado** real (antes era plano de un nivel), con dedup de subárboles repetidos (`↩`) y corte de ciclos
+
+### Added
+- Flag `--depth N|all` en `gradle-analyzer` (y selector de profundidad en el menú): limita cuántos niveles de "internas de sus internas" se recorren (default: `all`)
+
 ## [1.5.0] - 2026-06-07
 
 ### Added

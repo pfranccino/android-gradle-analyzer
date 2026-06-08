@@ -33,6 +33,7 @@ def run_internal(
     focus: str | None = None,
     on_progress=None,
     engine: str = "static",
+    depth: int | None = None,
 ) -> dict:
     """
     Analiza dependencias internas de un módulo Android.
@@ -48,6 +49,7 @@ def run_internal(
             config_path=config,
             exclude=exclude or [],
             engine=engine,
+            depth=depth,
         )
 
         focus_list = [m.strip() for m in focus.split(',')] if focus else None

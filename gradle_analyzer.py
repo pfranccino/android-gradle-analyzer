@@ -35,12 +35,13 @@ _DOT_COLORS = {
 
 class GradleDependencyAnalyzer:
     def __init__(self, base_path, config_path=None, exclude=None, verbose=True,
-                 engine="static", focus=None):
+                 engine="static", focus=None, depth=None):
         self.base_path     = Path(base_path).resolve()
         self.root          = self.base_path
         self.config        = load_config(config_path)
         self.exclude       = set(exclude or [])
         self._init_focus   = list(focus) if focus else None
+        self.depth         = depth        # profundidad del árbol de internas (None = todas)
         self.modules       = []          # registry COMPLETO (nodos del grafo, contexto)
         self.known_modules = []
         self.focus_modules = []          # subconjunto a enfocar en la salida
@@ -122,32 +123,28 @@ class GradleDependencyAnalyzer:
         return detect_cycles(self.dependencies)
 
     def _focused_modules(self, focus_list):
-        """Vecindario del foco: los módulos foco + todo lo que usan (downstream
-        transitivo) + sus llamadores directos (1 salto upstream). Así la vista
-        enfocada muestra el módulo "en contexto": qué usa y quién lo usa."""
-        focus   = [m for m in focus_list if m in self.modules]
-        visited = set()
+        """Clausura hacia abajo desde el foco: el módulo y lo que usa, recursivo,
+        hasta `self.depth` saltos (None = sin límite). El módulo elegido es la raíz
+        del árbol de dependencias internas.
 
-        # Downstream: lo que el foco usa, transitivo.
-        queue = list(focus)
-        while queue:
-            m = queue.pop()
-            if m in visited:
-                continue
-            visited.add(m)
-            for scope_deps in self.dependencies.get(m, {}).values():
-                for dep in scope_deps:
-                    if dep not in visited:
-                        queue.append(dep)
-
-        # Upstream: llamadores directos del foco (quién depende de él).
-        focus_set = set(focus)
-        for mod in self.modules:
-            deps = set()
-            for scope_deps in self.dependencies.get(mod, {}).values():
-                deps |= scope_deps
-            if deps & focus_set:
-                visited.add(mod)
+        NO incluye llamadores: "quién me llama" es la función de Llamadas externas.
+        Como el conjunto es cerrado bajo "depende de" (toda arista de un nodo de la
+        vista cae dentro de la vista), la salida nunca arrastra módulos ajenos al foco
+        (ej. enfocar un módulo no vuelca toda la lista de dependencias de `app`)."""
+        roots    = [m for m in focus_list if m in self.modules]
+        visited  = set(roots)
+        frontier = list(roots)
+        level    = 0
+        while frontier and (self.depth is None or level < self.depth):
+            nxt = []
+            for m in frontier:
+                for scope_deps in self.dependencies.get(m, {}).values():
+                    for dep in scope_deps:
+                        if dep not in visited:
+                            visited.add(dep)
+                            nxt.append(dep)
+            frontier = nxt
+            level += 1
 
         return [m for m in self.modules if m in visited]
 
@@ -352,11 +349,35 @@ class GradleDependencyAnalyzer:
         return "\n".join(lines)
 
     def generate_ascii(self, focus=None):
+        """Árbol de dependencias internas enraizado en el foco (o un bosque desde
+        los puntos de entrada si no hay foco). Recorre hacia abajo respetando
+        `self.depth`. Un módulo ya expandido en otra rama se marca con `↩` y no se
+        vuelve a desplegar (evita duplicar subárboles y cortar ciclos)."""
         eff_focus = self._effective_focus(focus)
-        modules   = self._focused_modules(eff_focus) if eff_focus else self.modules
-        known_set = set(self.known_modules) if self.known_modules else set(modules)
+        if eff_focus:
+            view  = set(self._focused_modules(eff_focus))
+            roots = [m for m in eff_focus if m in self.modules]
+        else:
+            view = set(self.modules)
+            used = {
+                dep
+                for m in self.modules
+                for deps in self.dependencies.get(m, {}).values()
+                for dep in deps
+            }
+            roots = [m for m in self.modules if m not in used] or list(self.modules)
+
+        known_set = set(self.known_modules) if self.known_modules else view
         name      = self.base_path.name
         width     = 70
+
+        def children(node):
+            agg = defaultdict(set)
+            for scope, deps in self.dependencies.get(node, {}).items():
+                for dep in deps:
+                    if dep in view and dep in known_set:
+                        agg[dep].add(scope)
+            return [(dep, ", ".join(sorted(scopes))) for dep, scopes in sorted(agg.items())]
 
         lines = [
             "━" * width,
@@ -364,27 +385,32 @@ class GradleDependencyAnalyzer:
             "━" * width,
             "",
         ]
+        expanded = set()
 
-        for module in sorted(modules):
-            scoped = self.dependencies.get(module, {})
-            all_deps = [
-                (dep, scope)
-                for scope, deps in sorted(scoped.items())
-                for dep in sorted(deps)
-                if dep in known_set
-            ]
+        def walk(node, scope_label, prefix, is_last, level):
+            connector = "└── " if is_last else "├── "
+            icon      = get_icon(node, self.config)
+            kids      = children(node)
+            repeat    = node in expanded and bool(kids)
+            label     = f"{icon} {node}  [{scope_label}]" + ("  ↩" if repeat else "")
+            lines.append(f"{prefix}{connector}{label}")
+            if not kids or repeat or (self.depth is not None and level >= self.depth):
+                return
+            expanded.add(node)
+            child_prefix = prefix + ("    " if is_last else "│   ")
+            for i, (dep, sl) in enumerate(kids):
+                walk(dep, sl, child_prefix, i == len(kids) - 1, level + 1)
 
-            icon = get_icon(module, self.config)
-            lines.append(f"{icon} {module}")
-
-            if not all_deps:
+        for root in sorted(roots):
+            icon = get_icon(root, self.config)
+            lines.append(f"{icon} {root}")
+            expanded.add(root)
+            kids = children(root)
+            if not kids:
                 lines.append("  (sin dependencias internas)")
-            else:
-                for i, (dep, scope) in enumerate(all_deps):
-                    connector = "└──" if i == len(all_deps) - 1 else "├──"
-                    dep_icon  = get_icon(dep, self.config)
-                    lines.append(f"  {connector} {dep_icon} {dep}  [{scope}]")
-
+            elif self.depth is None or self.depth >= 1:
+                for i, (dep, sl) in enumerate(kids):
+                    walk(dep, sl, "", i == len(kids) - 1, 1)
             lines.append("")
 
         return "\n".join(lines)
@@ -520,6 +546,19 @@ class GradleDependencyAnalyzer:
         self._vprint(f"✓ Reporte: {p}")
 
 
+def _depth_type(value):
+    """Valida --depth: un entero >= 1 o 'all' (→ None, sin límite)."""
+    if value == 'all':
+        return None
+    try:
+        n = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError("--depth debe ser un entero >= 1 o 'all'")
+    if n < 1:
+        raise argparse.ArgumentTypeError("--depth debe ser >= 1")
+    return n
+
+
 def _build_analyzer(args):
     focus = [m.strip() for m in args.focus.split(',')] if getattr(args, 'focus', None) else None
     analyzer = GradleDependencyAnalyzer(
@@ -528,6 +567,7 @@ def _build_analyzer(args):
         exclude=args.exclude,
         verbose=not args.quiet,
         engine=args.engine,
+        depth=getattr(args, 'depth', None),
     )
     analyzer.scan_modules()
     analyzer.analyze_gradle_dependencies()
@@ -544,7 +584,10 @@ def main():
                         default=None, dest='fmt', metavar='FORMAT')
     parser.add_argument('--output-dir', default=None, dest='output_dir', metavar='DIR')
     parser.add_argument('--exclude', action='append', default=[], metavar='MODULE')
-    parser.add_argument('--focus',   default=None, metavar='MODULE[,MODULE]')
+    parser.add_argument('--focus',   default=None, metavar='MODULE[,MODULE]',
+                        help='Módulo(s) raíz del árbol de dependencias internas')
+    parser.add_argument('--depth',   type=_depth_type, default=None, metavar='N|all',
+                        help="Profundidad del árbol de internas: entero >= 1 o 'all' (default: all)")
     parser.add_argument('--config',  default=None, metavar='PATH')
     parser.add_argument('--engine',  choices=['static', 'dynamic', 'auto'], default=None,
                         help='Motor de extracción de dependencias (default: static)')

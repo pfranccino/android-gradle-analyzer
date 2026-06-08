@@ -245,6 +245,10 @@ def _action_internal(last_result, deps):
         return last_result
     focus = focus_answer
 
+    depth = prompts.ask_depth()
+    if depth == prompts.BACK:
+        return last_result
+
     engine = prompts.ask_engine()
     if not engine:
         return last_result
@@ -256,7 +260,7 @@ def _action_internal(last_result, deps):
     with ui.analysis_progress(progress_label, n_modules) as on_progress:
         result = actions.run_internal(
             path=path, fmt=fmt, output_dir="diagrams",
-            focus=focus, on_progress=on_progress, engine=engine,
+            focus=focus, on_progress=on_progress, engine=engine, depth=depth,
         )
 
     ctx = _post_analysis(result, "internal", path, focus,
