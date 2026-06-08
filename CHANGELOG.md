@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 - Flag `--depth N|all` en `gradle-analyzer` (y selector de profundidad en el menú): limita cuántos niveles de "internas de sus internas" se recorren (default: `all`)
 
+### Fixed
+- **Motor dinámico: explosión de dependencias por flavor/buildType.** El init script recorría todas las configuraciones, incluidas las resolvables que AGP deriva (`*CompileClasspath`/`*RuntimeClasspath`), que heredan las deps de los buckets declarables y reportaban la misma arista una vez por variante (en un proyecto con 4 flavors, ×5 por dependencia). Ahora se inspeccionan solo configuraciones declarables (`cfg.canBeResolved` descarta las resolvables), con red de seguridad en `_normalize_raw`
+- **Barra de progreso clavada en 0% con motor dinámico/auto.** El motor dinámico hace todo el trabajo en una sola llamada bloqueante a Gradle antes de poder reportar progreso, así que la barra determinada se quedaba en `0/N` durante los minutos de configuración y saltaba a 100% al final. Para dinámico/auto ahora se usa un spinner indeterminado y un aviso de que Gradle puede tardar varios minutos
+
 ## [1.5.0] - 2026-06-07
 
 ### Added

@@ -256,12 +256,22 @@ def _action_internal(last_result, deps):
     progress_label = (
         f"Analizando '{focus}'..." if focus else "Analizando dependencias internas..."
     )
-    n_modules = len(modules) if modules else 0
-    with ui.analysis_progress(progress_label, n_modules) as on_progress:
-        result = actions.run_internal(
-            path=path, fmt=fmt, output_dir="diagrams",
-            focus=focus, on_progress=on_progress, engine=engine, depth=depth,
-        )
+    ui.print_dynamic_warning(engine)
+    if engine in ("dynamic", "auto"):
+        # El motor dinámico corre Gradle en una sola llamada bloqueante: una barra
+        # determinada se quedaría en 0% hasta el final. Spinner indeterminado.
+        with ui.analysis_spinner(progress_label):
+            result = actions.run_internal(
+                path=path, fmt=fmt, output_dir="diagrams",
+                focus=focus, engine=engine, depth=depth,
+            )
+    else:
+        n_modules = len(modules) if modules else 0
+        with ui.analysis_progress(progress_label, n_modules) as on_progress:
+            result = actions.run_internal(
+                path=path, fmt=fmt, output_dir="diagrams",
+                focus=focus, on_progress=on_progress, engine=engine, depth=depth,
+            )
 
     ctx = _post_analysis(result, "internal", path, focus,
                          ui, prompts, console, add_history_entry,
@@ -288,6 +298,7 @@ def _action_external(last_result, deps):
     engine = prompts.ask_engine()
     if not engine:
         return last_result
+    ui.print_dynamic_warning(engine)
     with ui.analysis_spinner(f"Buscando llamadas externas a '{module}'..."):
         result = actions.run_external(project=path, module=module, fmt=fmt,
                                       output_dir="external-calls", engine=engine)
@@ -319,6 +330,7 @@ def _action_sanity(last_result, deps):
     if not engine:
         return last_result
     label = f"Calculando sanidad de '{focus_answer}'..." if focus_answer else "Calculando métricas de sanidad..."
+    ui.print_dynamic_warning(engine)
     with ui.analysis_spinner(label):
         result = actions.run_sanity(path=path, output_dir="sanity", engine=engine, focus=focus)
     if result["ok"]:
@@ -356,6 +368,7 @@ def _action_impact(last_result, deps):
     engine = prompts.ask_engine()
     if not engine:
         return last_result
+    ui.print_dynamic_warning(engine)
     with ui.analysis_spinner(f"Calculando impacto de '{module}'..."):
         result = actions.run_impact(project=path, module=module, fmt=fmt,
                                     output_dir="impact", engine=engine)
