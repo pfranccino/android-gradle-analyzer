@@ -39,6 +39,7 @@ class GradleDependencyAnalyzer:
     def __init__(self, base_path, config_path=None, exclude=None, verbose=True,
                  engine="static"):
         self.base_path     = Path(base_path).resolve()
+        self.root          = self.base_path
         self.config        = load_config(config_path)
         self.exclude       = set(exclude or [])
         self.modules       = []
@@ -56,48 +57,55 @@ class GradleDependencyAnalyzer:
             print("❌ Error: La ruta no existe")
             return self
 
-        from_settings = parse_settings_modules(self.base_path)
+        # La raíz del proyecto (donde vive settings.gradle) define el registry
+        # completo y los nombres CANÓNICOS de los módulos (relativos a la raíz).
+        self.root    = find_project_root(self.base_path)
+        root_modules = parse_settings_modules(self.root)
 
-        if from_settings is not None:
-            for module_name in sorted(from_settings):
+        if root_modules:
+            self.known_modules = root_modules
+            # Módulos a analizar = los del registry cuyo directorio cae bajo
+            # base_path. Si base_path == raíz, son todos. Se conserva el nombre
+            # COMPLETO (relativo a la raíz) para que coincida con los
+            # project(":a:b") declarados — clave al analizar un subárbol: sin
+            # esto el módulo ':grupo:hijo' se vería como 'hijo' y los edges
+            # internos del subárbol se perderían.
+            for module_name in sorted(root_modules):
+                module_dir = self.root / module_name.replace(':', '/')
+                try:
+                    module_dir.relative_to(self.base_path)
+                except ValueError:
+                    continue  # fuera del subárbol analizado
                 if module_name in self.exclude:
                     self._vprint(f"  ⊘ {module_name} (excluido)")
                     continue
                 self.modules.append(module_name)
-                self.module_paths[module_name] = Path(module_name.replace(':', '/'))
+                self.module_paths[module_name] = module_dir.relative_to(self.root)
                 self._vprint(f"  • {module_name}")
+            if self.root != self.base_path:
+                self._vprint(
+                    f"\n📡 Raíz detectada: {self.root}"
+                    f" ({len(self.known_modules)} módulos conocidos,"
+                    f" {len(self.modules)} bajo '{self.base_path.name}')"
+                )
         else:
+            # Sin settings.gradle en ninguna carpeta superior: escaneo por
+            # carpetas desde base_path (nombres relativos a base_path).
             for gradle_file in sorted(self.base_path.rglob("build.gradle*")):
                 module_dir = gradle_file.parent
                 try:
-                    rel_path    = module_dir.relative_to(self.base_path)
-                    module_name = str(rel_path).replace('/', ':').replace('\\', ':')
-                    if module_name == '.':
-                        continue
-                    if module_name in self.exclude:
-                        self._vprint(f"  ⊘ {module_name} (excluido)")
-                        continue
-                    self.modules.append(module_name)
-                    self.module_paths[module_name] = rel_path
-                    self._vprint(f"  • {module_name}")
+                    rel_path = module_dir.relative_to(self.base_path)
                 except ValueError:
                     continue
-
-        # Detectar raíz del proyecto para construir el registry completo de módulos.
-        # Permite resolver dependencias a módulos fuera del base_path analizado.
-        root = find_project_root(self.base_path)
-        if root != self.base_path:
-            root_modules = parse_settings_modules(root)
-            if root_modules:
-                self.known_modules = root_modules
-                self._vprint(
-                    f"\n📡 Raíz detectada: {root}"
-                    f" ({len(self.known_modules)} módulos conocidos,"
-                    f" {len(self.modules)} a analizar)"
-                )
-            else:
-                self.known_modules = list(self.modules)
-        else:
+                module_name = str(rel_path).replace('/', ':').replace('\\', ':')
+                if module_name == '.':
+                    continue
+                if module_name in self.exclude:
+                    self._vprint(f"  ⊘ {module_name} (excluido)")
+                    continue
+                self.modules.append(module_name)
+                self.module_paths[module_name] = rel_path
+                self._vprint(f"  • {module_name}")
             self.known_modules = list(self.modules)
 
         self._vprint(f"\n✓ {len(self.modules)} módulos encontrados\n")
@@ -107,7 +115,7 @@ class GradleDependencyAnalyzer:
         self._vprint(f"🔍 Analizando dependencias (motor: {self.engine_name})...")
 
         resolved = self.engine.resolve(
-            self.base_path, self.modules, self.known_modules, on_progress=on_progress,
+            self.root, self.modules, self.known_modules, on_progress=on_progress,
         )
 
         for module in self.modules:

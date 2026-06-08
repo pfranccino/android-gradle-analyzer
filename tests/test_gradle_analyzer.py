@@ -112,6 +112,55 @@ class TestGradleDependencyAnalyzer:
         assert "legacy:plain-lib"        in app_deps.get("implementation", set())
 
 
+class TestSubtreeAnalysis:
+    """Analizar un SUBÁRBOL (no la raíz) debe usar los nombres CANÓNICOS de los
+    módulos (relativos a la raíz, con prefijo de grupo), no relativos a la carpeta
+    apuntada. Si no, ':grupo:hijo' se vería como 'hijo' y los edges internos del
+    subárbol se perderían (síntoma: "no detecta nada")."""
+
+    def _make_project(self, root: Path):
+        (root / "settings.gradle.kts").write_text(
+            'include("app")\ninclude("view")\ninclude("pin")\n'
+            'include("grp:sub-a")\ninclude("grp:sub-b")\n', encoding="utf-8")
+
+        def mod(path, body):
+            d = root / path
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "build.gradle.kts").write_text(body, encoding="utf-8")
+
+        mod("app",       'dependencies {\n  implementation(project(":grp:sub-a"))\n  implementation(project(":view"))\n}')
+        mod("view",      'dependencies {}')
+        mod("pin",       'dependencies {}')
+        mod("grp/sub-a", 'dependencies {\n  implementation(project(":view"))\n  implementation(project(":pin"))\n}')
+        mod("grp/sub-b", 'dependencies {\n  implementation(project(":grp:sub-a"))\n}')
+
+    def test_subtree_uses_canonical_names(self, tmp_path):
+        self._make_project(tmp_path)
+        a = GradleDependencyAnalyzer(base_path=str(tmp_path / "grp"), verbose=False)
+        a.scan_modules()
+        # Nombres completos con prefijo de grupo, NO 'sub-a' / 'sub-b'
+        assert set(a.modules) == {"grp:sub-a", "grp:sub-b"}
+        # El registry completo (known_modules) sigue siendo el de la raíz
+        assert "app" in a.known_modules
+
+    def test_subtree_preserves_internal_edge(self, tmp_path):
+        self._make_project(tmp_path)
+        a = GradleDependencyAnalyzer(base_path=str(tmp_path / "grp"), verbose=False)
+        a.scan_modules()
+        a.analyze_gradle_dependencies()
+        # El edge interno del subárbol (sub-b -> grp:sub-a) se conserva
+        assert "grp:sub-a" in a.dependencies["grp:sub-b"].get("implementation", set())
+        # Y las deps hacia afuera del subárbol también se detectan (nombres canónicos)
+        assert "view" in a.dependencies["grp:sub-a"].get("implementation", set())
+
+    def test_root_analysis_unchanged(self, tmp_path):
+        """Analizar la raíz completa sigue detectando todos los módulos."""
+        self._make_project(tmp_path)
+        a = GradleDependencyAnalyzer(base_path=str(tmp_path), verbose=False)
+        a.scan_modules()
+        assert set(a.modules) == {"app", "view", "pin", "grp:sub-a", "grp:sub-b"}
+
+
 class TestFindGradleFile:
 
     def test_finds_standard_build_gradle(self):
