@@ -17,6 +17,7 @@ from analyzer_utils import (
     build_accessor_map,
     _preprocess_groovy,
     _strip_comments,
+    _extract_includes,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -299,6 +300,131 @@ class TestParseSettingsModules:
         modules = parse_settings_modules(FIXTURES / "with_settings")
         assert modules is not None
         assert "app" in modules
+
+
+# ── _extract_includes: formatos multilínea Kotlin DSL y Groovy ────────────────
+
+class TestExtractIncludesFormats:
+    """Cobertura de los formatos reales de settings.gradle(.kts).
+
+    Regresión del bug "no detecta nada": include() multilínea (Kotlin DSL)
+    devolvía 0 módulos porque el parser iba línea por línea.
+    """
+
+    def _write(self, tmp_path, name, content):
+        p = tmp_path / name
+        p.write_text(content, encoding="utf-8")
+        return p
+
+    def test_kts_include_multilinea_trailing_comma(self, tmp_path):
+        p = self._write(tmp_path, "settings.gradle.kts",
+            'include(\n    ":app",\n    ":core:network",\n    ":feature:home",\n)\n')
+        assert set(_extract_includes(p)) == {"app", "core:network", "feature:home"}
+
+    def test_kts_include_multilinea_sin_trailing_comma(self, tmp_path):
+        p = self._write(tmp_path, "settings.gradle.kts",
+            'include(\n    ":app",\n    ":core:network"\n)\n')
+        assert set(_extract_includes(p)) == {"app", "core:network"}
+
+    def test_kts_varios_modulos_en_un_include(self, tmp_path):
+        p = self._write(tmp_path, "settings.gradle.kts",
+            'include(":app", ":core:network", ":feature:home")\n')
+        assert set(_extract_includes(p)) == {"app", "core:network", "feature:home"}
+
+    def test_kts_foreach_sobre_listof(self, tmp_path):
+        p = self._write(tmp_path, "settings.gradle.kts",
+            'listOf(\n    ":app",\n    ":core",\n).forEach { include(it) }\n')
+        assert set(_extract_includes(p)) == {"app", "core"}
+
+    def test_kts_bloque_comentado_no_cuenta(self, tmp_path):
+        p = self._write(tmp_path, "settings.gradle.kts",
+            'include(":app")\n/*\ninclude(":legacy")\n*/\ninclude(":core")\n')
+        assert set(_extract_includes(p)) == {"app", "core"}
+
+    def test_kts_variable_includedX_no_es_include(self, tmp_path):
+        p = self._write(tmp_path, "settings.gradle.kts",
+            'val includedFeatures = listOf("feature-a", "feature-b")\ninclude(":app")\n')
+        assert set(_extract_includes(p)) == {"app"}
+
+    def test_kts_crlf_y_tabs(self, tmp_path):
+        p = self._write(tmp_path, "settings.gradle.kts",
+            'include(\r\n\t":app",\r\n\t":core:network",\r\n)\r\n')
+        assert set(_extract_includes(p)) == {"app", "core:network"}
+
+    def test_kts_mezcla_single_y_multi(self, tmp_path):
+        p = self._write(tmp_path, "settings.gradle.kts",
+            'include(":app")\ninclude(\n    ":core:network",\n    ":core:database",\n)\n'
+            'include(":feature:home", ":feature:profile")\n')
+        assert set(_extract_includes(p)) == {
+            "app", "core:network", "core:database", "feature:home", "feature:profile"}
+
+    def test_groovy_lista_multilinea_trailing_comma(self, tmp_path):
+        p = self._write(tmp_path, "settings.gradle",
+            "include ':app',\n        ':core:network',\n        ':feature:home'\n")
+        assert set(_extract_includes(p)) == {"app", "core:network", "feature:home"}
+
+    def test_groovy_bloque_comentado_no_cuenta(self, tmp_path):
+        p = self._write(tmp_path, "settings.gradle",
+            "include ':app'\n/* include ':legacy'\n   include ':old' */\ninclude ':core'\n")
+        assert set(_extract_includes(p)) == {"app", "core"}
+
+    def test_groovy_semicolons_en_una_linea(self, tmp_path):
+        p = self._write(tmp_path, "settings.gradle",
+            "include ':app'; include ':core'; include ':feature:home'\n")
+        assert set(_extract_includes(p)) == {"app", "core", "feature:home"}
+
+    def test_settings_vacio_devuelve_none_para_fallback(self, tmp_path):
+        """settings con solo rootProject.name → None para caer a rglob."""
+        p = self._write(tmp_path, "settings.gradle.kts", 'rootProject.name = "demo"\n')
+        assert parse_settings_modules(tmp_path) is None
+
+    def test_groovy_include_parentesis_sin_colon_a_escala(self, tmp_path):
+        """settings Groovy grande: pluginManagement + includeBuild + plugins,
+        y decenas de include("modulo") con paréntesis, sin ':' inicial y con
+        anidamiento profundo. (Nombres ficticios — estructura típica de monorepo)."""
+        content = (
+            'pluginManagement {\n'
+            '    includeBuild("build-logic")\n'
+            '    repositories {\n'
+            '        google()\n'
+            '        mavenCentral()\n'
+            '        gradlePluginPortal()\n'
+            '    }\n'
+            '}\n'
+            'plugins {\n'
+            "    id 'org.example.toolchains.resolver' version '0.10.0'\n"
+            '}\n'
+            '\n'
+            'include("app")\n'
+            'include("app-shell")\n'
+            'include("alpha:home")\n'
+            'include("alpha:detail:data")\n'
+            'include("alpha:detail:domain")\n'
+            'include("alpha:detail:presentation")\n'
+            'include("beta:gateway")\n'
+            'include("beta:onboarding")\n'
+            'include("payments:p2p")\n'
+            'include("payments:transfers:domestic")\n'
+            'include("platform:analytics:core")\n'
+            'include("platform:analytics:firebase")\n'
+            'include("platform:logger")\n'
+            'include("shared:theme")\n'
+            'include("shared:components:list-view")\n'
+        )
+        p = self._write(tmp_path, "settings.gradle", content)
+        mods = _extract_includes(p)
+        expected = {
+            "app", "app-shell", "alpha:home",
+            "alpha:detail:data", "alpha:detail:domain", "alpha:detail:presentation",
+            "beta:gateway", "beta:onboarding",
+            "payments:p2p", "payments:transfers:domestic",
+            "platform:analytics:core", "platform:analytics:firebase", "platform:logger",
+            "shared:theme", "shared:components:list-view",
+        }
+        assert set(mods) == expected
+        assert "build-logic" not in mods          # includeBuild no es módulo
+        assert "0.10.0" not in mods               # versión de plugin no es módulo
+        assert len(mods) == len(set(mods))        # sin duplicados
 
 
 # ── _preprocess_groovy / _strip_comments ──────────────────────────────────────
