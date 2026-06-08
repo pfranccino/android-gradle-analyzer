@@ -25,9 +25,11 @@ def setup_utf8() -> None:
 # ─── Detección de módulos ──────────────────────────────────────────────────
 
 _INCLUDE_RE = re.compile(r'["\'](:?[\w:/-]+)["\']')
-# `include` como palabra completa: matchea `include(...)` / `include '...'` pero
-# NO `includeBuild` ni identificadores como `includedFeatures`.
-_INCLUDE_KW = re.compile(r'\binclude\b')
+# Detecta una llamada `include(...)` o `include '...'` real: la palabra `include`
+# seguida (tras espacios opcionales) de '(' o de una comilla. Así NO matchea
+# `includeBuild`, identificadores como `includedFeatures`, ni la palabra
+# "include" embebida en un string (ej. rootProject.name = "include-this").
+_INCLUDE_CALL = re.compile(r'\binclude\s*[("\']')
 
 
 def _join_statements(content: str) -> list:
@@ -57,7 +59,7 @@ def _join_statements(content: str) -> list:
         if depth < 0:
             depth = 0
         joined = ' '.join(buf)
-        if depth > 0 or (line.endswith(',') and _INCLUDE_KW.search(joined)):
+        if depth > 0 or (line.endswith(',') and _INCLUDE_CALL.search(joined)):
             continue
         statements.append(joined)
         buf = []
@@ -74,12 +76,16 @@ def _extract_includes(settings_path) -> list:
     content = _strip_comments(Path(settings_path).read_text(encoding='utf-8'))
     modules: list = []
     for stmt in _join_statements(content):
-        if not _INCLUDE_KW.search(stmt) or 'includeBuild' in stmt:
-            continue
-        for match in _INCLUDE_RE.finditer(stmt):
-            normalized = normalize_module_name(match.group(1).lstrip(':'))
-            if normalized and normalized not in modules:
-                modules.append(normalized)
+        # Un statement lógico puede agrupar varias sentencias separadas por ';'
+        # (ej. include(":a"); rootProject.name = "x"). Se procesa cada una por
+        # separado para no capturar strings de sentencias vecinas como módulos.
+        for clause in stmt.split(';'):
+            if not _INCLUDE_CALL.search(clause) or 'includeBuild' in clause:
+                continue
+            for match in _INCLUDE_RE.finditer(clause):
+                normalized = normalize_module_name(match.group(1).lstrip(':'))
+                if normalized and normalized not in modules:
+                    modules.append(normalized)
     return modules
 
 

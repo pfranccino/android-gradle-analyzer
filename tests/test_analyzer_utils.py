@@ -426,6 +426,69 @@ class TestExtractIncludesFormats:
         assert "0.10.0" not in mods               # versión de plugin no es módulo
         assert len(mods) == len(set(mods))        # sin duplicados
 
+    # ── antifalsos-positivos: sentencias pegadas, strings, condicionales ──────
+
+    def test_kts_semicolon_no_captura_rootproject_name(self, tmp_path):
+        """include + rootProject.name en la misma línea (;) → solo el módulo."""
+        p = self._write(tmp_path, "settings.gradle.kts",
+            'include(":app"); rootProject.name = "demo"\n')
+        assert set(_extract_includes(p)) == {"app"}
+
+    def test_kts_semicolon_no_captura_projectdir(self, tmp_path):
+        """include + project().projectDir con ; → no captura la ruta del file()."""
+        p = self._write(tmp_path, "settings.gradle.kts",
+            'include(":app") ; project(":app").projectDir = file("custom/core")\n')
+        assert set(_extract_includes(p)) == {"app"}
+
+    def test_kts_nombre_proyecto_con_palabra_include(self, tmp_path):
+        """rootProject.name = "include-..." no debe contarse como módulo."""
+        p = self._write(tmp_path, "settings.gradle.kts",
+            'rootProject.name = "include-this"\ninclude(":app")\n')
+        assert set(_extract_includes(p)) == {"app"}
+
+    def test_kts_semicolon_dos_includes(self, tmp_path):
+        p = self._write(tmp_path, "settings.gradle.kts",
+            'include(":app"); include(":core")\n')
+        assert set(_extract_includes(p)) == {"app", "core"}
+
+    def test_kts_include_condicional_en_if(self, tmp_path):
+        p = self._write(tmp_path, "settings.gradle.kts",
+            'if (System.getenv("DEBUG") != null) {\n    include(":debug-tools")\n}\ninclude(":app")\n')
+        assert set(_extract_includes(p)) == {"debug-tools", "app"}
+
+    def test_kts_comentario_bloque_inline_en_include(self, tmp_path):
+        p = self._write(tmp_path, "settings.gradle.kts",
+            'include(/* viejo */ ":app")\ninclude(":core")\n')
+        assert set(_extract_includes(p)) == {"app", "core"}
+
+    def test_kts_bloque_comentado_con_paren_desbalanceado(self, tmp_path):
+        """Un /* */ con '(' suelto entre includes no debe romper el conteo."""
+        p = self._write(tmp_path, "settings.gradle.kts",
+            'include(":app")\n/* nota con ( paren\ninclude(":fake") */\ninclude(":core")\n')
+        assert set(_extract_includes(p)) == {"app", "core"}
+
+    def test_kts_bom_al_inicio(self, tmp_path):
+        p = tmp_path / "settings.gradle.kts"
+        p.write_text('include(":app")\ninclude(":core")\n', encoding="utf-8-sig")
+        assert set(_extract_includes(p)) == {"app", "core"}
+
+    def test_kts_interpolacion_no_resoluble_no_rompe(self, tmp_path):
+        """include(":feature:${var}") no es resoluble estáticamente → se omite sin romper."""
+        p = self._write(tmp_path, "settings.gradle.kts",
+            'val name = "x"\ninclude(":feature:${name}")\ninclude(":app")\n')
+        assert set(_extract_includes(p)) == {"app"}
+
+    def test_groovy_include_condicional_en_if(self, tmp_path):
+        p = self._write(tmp_path, "settings.gradle",
+            "if (hasProperty('debug')) {\n    include ':debug-tools'\n}\ninclude ':app'\n")
+        assert set(_extract_includes(p)) == {"debug-tools", "app"}
+
+    def test_solo_includebuild_devuelve_none(self, tmp_path):
+        """settings con solo includeBuild → None para caer a rglob."""
+        self._write(tmp_path, "settings.gradle.kts",
+            'pluginManagement {\n    includeBuild("build-logic")\n}\n')
+        assert parse_settings_modules(tmp_path) is None
+
 
 # ── _preprocess_groovy / _strip_comments ──────────────────────────────────────
 
