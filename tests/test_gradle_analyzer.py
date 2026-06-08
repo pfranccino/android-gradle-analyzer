@@ -238,6 +238,40 @@ class TestRootedInternalTree:
         assert "↩" in out   # c llega por b y por api; la 2da aparición se marca
 
 
+class TestJsonOutput:
+    """Salida JSON estructurada (para que una skill la consuma)."""
+
+    def test_schema_and_unfocused(self):
+        a = GradleDependencyAnalyzer(base_path=str(FIXTURES / "simple"))
+        a.scan_modules()
+        a.analyze_gradle_dependencies()
+        data = a.to_json_dict()
+        assert data["schema_version"] == 1
+        assert data["tool"] == "internal"
+        assert set(data["modules"]) == {"app", "core"}
+        assert data["dependencies"]["app"]["implementation"] == ["core"]
+
+    def test_json_respects_focus(self):
+        a = GradleDependencyAnalyzer(base_path=str(FIXTURES / "simple"))
+        a.scan_modules()
+        a.analyze_gradle_dependencies()
+        data = a.to_json_dict(focus=["core"])
+        assert set(data["modules"]) == {"core"}      # solo el árbol enraizado en core
+        assert "app" not in data["dependencies"]     # el llamador no aparece
+        assert data["focus"] == ["core"]
+
+    def test_save_all_writes_json_file(self, tmp_path):
+        import json as _json
+        a = GradleDependencyAnalyzer(base_path=str(FIXTURES / "simple"), verbose=False)
+        a.scan_modules()
+        a.analyze_gradle_dependencies()
+        a.save_all(output_dir=str(tmp_path), fmt="json")
+        p = tmp_path / "gradle-dependencies.json"
+        assert p.exists()
+        data = _json.loads(p.read_text(encoding="utf-8"))
+        assert data["tool"] == "internal"
+
+
 class TestFindGradleFile:
 
     def test_finds_standard_build_gradle(self):

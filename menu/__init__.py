@@ -106,6 +106,16 @@ def _handle_export(last_result, prompts, ui, console,
         generated.append(path)
         console.print(f"  [green]✓[/green] Markdown: [cyan]{path}[/cyan]")
 
+    if "json" in formats:
+        json_data = last_result.get("json")
+        if json_data:
+            from menu.exporter import to_json
+            path = to_json(json_data, project_name=project_name)
+            generated.append(path)
+            console.print(f"  [green]✓[/green] JSON: [cyan]{path}[/cyan]")
+        else:
+            console.print("  [yellow]⚠[/yellow] No hay datos estructurados para exportar a JSON.")
+
     if "zip" in formats:
         path = to_zip(dirs_to_pack=["diagrams", "external-calls", "sanity"],
                       project_name=project_name)
@@ -213,6 +223,7 @@ def _post_analysis(result, action, project, module,
             "summary":      result.get("summary", ""),
             "project_name": (module or "analysis"),
             "mermaid_path": mermaid_files[0] if mermaid_files else None,
+            "json":         result.get("json"),
         }
         _handle_export(ctx, prompts, ui, console,
                        to_html, to_pdf, to_markdown, to_zip, PDF_AVAILABLE)
@@ -223,6 +234,7 @@ def _post_analysis(result, action, project, module,
         "summary":      result.get("summary", ""),
         "project_name": (module or "analysis"),
         "mermaid_path": mermaid_files[0] if mermaid_files else None,
+        "json":         result.get("json"),
     }
 
 
@@ -344,7 +356,8 @@ def _action_sanity(last_result, deps):
         add_history_entry(path, focus_answer, "sanity", outputs)
         set_last_project(path)
         ctx = {"summary": result.get("summary", ""),
-               "project_name": "sanity", "mermaid_path": None}
+               "project_name": "sanity", "mermaid_path": None,
+               "json": result.get("json")}
         if prompts.ask_confirm("¿Quieres exportar el reporte ahora?", default=False):
             _handle_export(ctx, prompts, ui, console,
                            to_html, to_pdf, to_markdown, to_zip, PDF_AVAILABLE)

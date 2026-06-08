@@ -5,6 +5,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-06-08
+
+### Added
+- **Salida JSON estructurada en las 4 herramientas** (`gradle-analyzer`, `gradle-externals`, `gradle-impact`, `gradle-sanity`): nuevo `--format json` —y opción JSON en el selector de formato y en la exportación del menú— que escribe un `.json` con `schema_version` estable, pensado para que una skill o script lo consuma y lo formatee. El JSON de internas respeta el foco y `--depth` (el árbol enraizado); externas incluye el cono de llamadores por nivel (`caller_cone`)
+
+### Fixed
+- **El resumen en pantalla (y los exports) ignoraba el foco.** `run_internal` generaba los archivos con el foco pero armaba el resumen sin él, así que en el menú "mostraba todo" el grafo. Ahora el resumen respeta el foco igual que los archivos
+- **Timer "congelado" con el motor dinámico/auto.** El spinner y la barra seguían `sys.stdout`, que el análisis redirige a un buffer para capturar logs; sus frames se iban al buffer y el timer no avanzaba en pantalla. Ahora fijan su `Console` al stdout real
+- **Prompt de profundidad simplificado**: quedan "Todas (hasta las hojas)" y "1 (solo directas)"; se quitan las opciones fijas "2" y "3" (para una profundidad puntual está `--depth N` por CLI)
+
 ## [1.6.0] - 2026-06-08
 
 ### Changed

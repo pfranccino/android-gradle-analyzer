@@ -106,6 +106,8 @@ class ImpactAnalyzer:
 
     def to_json_dict(self) -> dict:
         return {
+            "schema_version":    1,
+            "tool":              "impact",
             "project":           str(self.project_root),
             "target":            self.target_module,
             "total_modules":     len(self.all_modules),
@@ -200,6 +202,12 @@ class ImpactAnalyzer:
             p.write_text(self.generate_mermaid(), encoding="utf-8")
             self._vprint(f"✓ Mermaid: {p}")
 
+        if fmt in ("json", "all"):
+            p = output_path / f"{slug}-impact.json"
+            p.write_text(json.dumps(self.to_json_dict(), indent=2, ensure_ascii=False),
+                         encoding="utf-8")
+            self._vprint(f"✓ JSON: {p}")
+
         p = output_path / f"{slug}-impact-report.txt"
         p.write_text(self.generate_report(), encoding="utf-8")
         self._vprint(f"✓ Reporte: {p}")
@@ -212,7 +220,7 @@ def main():
     )
     parser.add_argument("project_root")
     parser.add_argument("target_module", nargs="?", default=None)
-    parser.add_argument("--format", choices=["plantuml", "mermaid", "all"], default="all",
+    parser.add_argument("--format", choices=["plantuml", "mermaid", "json", "all"], default="all",
                         dest="fmt", metavar="FORMAT")
     parser.add_argument("--output-dir", default=None, dest="output_dir", metavar="DIR")
     parser.add_argument("--config",     default=None, metavar="PATH")
