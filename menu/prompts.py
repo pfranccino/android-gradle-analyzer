@@ -262,11 +262,11 @@ def ask_focus(modules: list[str]) -> str | None:
     return answer
 
 
-def ask_depth() -> object:
-    """Profundidad del árbol de dependencias internas.
+def ask_depth(question: str = "Profundidad del árbol (niveles de 'internas de sus internas'):") -> object:
+    """Profundidad de un recorrido (árbol de internas o cono de llamadores).
     Devuelve None (todas, recursivo), un int, o BACK para cancelar."""
     answer = questionary.select(
-        "Profundidad del árbol (niveles de 'internas de sus internas'):",
+        question,
         choices=[
             questionary.Choice("Todas  (recursivo hasta las hojas)", value="all"),
             questionary.Choice("1  (solo dependencias directas)",    value="1"),

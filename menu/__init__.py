@@ -295,13 +295,16 @@ def _action_external(last_result, deps):
     fmt = prompts.ask_format()
     if not fmt:
         return last_result
+    depth = prompts.ask_depth("Profundidad del cono (cuántos niveles de llamadores):")
+    if depth == prompts.BACK:
+        return last_result
     engine = prompts.ask_engine()
     if not engine:
         return last_result
     ui.print_dynamic_warning(engine)
     with ui.analysis_spinner(f"Buscando llamadas externas a '{module}'..."):
         result = actions.run_external(project=path, module=module, fmt=fmt,
-                                      output_dir="external-calls", engine=engine)
+                                      output_dir="external-calls", engine=engine, depth=depth)
     ctx = _post_analysis(result, "external", path, module,
                          ui, prompts, console, add_history_entry,
                          set_last_project, set_last_module,

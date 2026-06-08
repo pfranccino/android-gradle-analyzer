@@ -86,6 +86,7 @@ def run_external(
     output_dir: str = "external-calls",
     config: str | None = None,
     engine: str = "static",
+    depth: int | None = None,
 ) -> dict:
     """
     Detecta qué módulos externos llaman al módulo dado.
@@ -101,6 +102,7 @@ def run_external(
             target_module=module,
             config_path=config,
             engine=engine,
+            depth=depth,
         )
 
         def _run():
