@@ -17,6 +17,7 @@ Problemas detectados:
 """
 
 import re
+import json
 import argparse
 from pathlib import Path
 from collections import defaultdict
@@ -601,10 +602,16 @@ class GradleSanityAnalyzer:
         report_file = output_path / "sanity-report.txt"
         report_file.write_text(self.generate_report(), encoding='utf-8')
         self._vprint(f"✓ Reporte: {report_file}")
+        json_file = output_path / "sanity-report.json"
+        json_file.write_text(json.dumps(self.to_json_dict(), indent=2, ensure_ascii=False),
+                             encoding='utf-8')
+        self._vprint(f"✓ JSON: {json_file}")
 
     def to_json_dict(self) -> dict:
         f = self._focused_issues()
         return {
+            "schema_version": 1,
+            "tool":    "sanity",
             "path":    str(self.base_path),
             "root":    str(self._dep.root),
             "focus":   list(self.focus_modules),

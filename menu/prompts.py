@@ -180,6 +180,7 @@ def ask_format() -> str | None:
             questionary.Choice("Mermaid   (.mmd)",                           value="mermaid"),
             questionary.Choice("Graphviz  (.dot)",                           value="dot"),
             questionary.Choice("ASCII     (terminal)",                       value="ascii"),
+            questionary.Choice("JSON      (estructurado, para skills/scripts)", value="json"),
             questionary.Separator(),
             questionary.Choice("← Volver",                                   value=BACK),
         ],
@@ -270,8 +271,6 @@ def ask_depth(question: str = "Profundidad del árbol (niveles de 'internas de s
         choices=[
             questionary.Choice("Todas  (recursivo hasta las hojas)", value="all"),
             questionary.Choice("1  (solo dependencias directas)",    value="1"),
-            questionary.Choice("2",                                  value="2"),
-            questionary.Choice("3",                                  value="3"),
             questionary.Separator(),
             questionary.Choice("← Volver",                           value=BACK),
         ],
@@ -294,6 +293,7 @@ def ask_export_formats(pdf_available: bool = True) -> list[str] | None:
     choices = [
         questionary.Choice("HTML  (colores, standalone)",    value="html",     checked=False),
         questionary.Choice("Markdown  (con bloque mermaid)", value="markdown", checked=False),
+        questionary.Choice("JSON  (estructurado, para skills/scripts)", value="json", checked=False),
         questionary.Choice("ZIP  (todos los archivos)",      value="zip",      checked=False),
     ]
     if pdf_available:

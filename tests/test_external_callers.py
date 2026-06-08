@@ -172,3 +172,11 @@ class TestExternalCallerCone:
         report = a.generate_report()
         assert "CADENA DE LLAMADORES" in report
         assert "Nivel 4" in report
+
+    def test_json_has_schema_and_cone(self, tmp_path):
+        self._chain(tmp_path)
+        a = self._analyzer(tmp_path)
+        data = a.to_json_dict()
+        assert data["schema_version"] == 1
+        assert data["tool"] == "external"
+        assert data["caller_cone"] == {"b": 1, "c": 2, "d": 3, "app": 4}

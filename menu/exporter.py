@@ -4,6 +4,7 @@ Los archivos originales (.puml, .mmd, .txt) NO se tocan.
 Este módulo sólo AGREGA nuevos formatos encima de los existentes.
 """
 
+import json
 import zipfile
 import webbrowser
 from pathlib import Path
@@ -152,6 +153,16 @@ def to_markdown(
     ]
 
     Path(dest).write_text("\n".join(lines), encoding="utf-8")
+    return dest
+
+
+# ── JSON ──────────────────────────────────────────────────────────────────────
+
+def to_json(data: dict, dest: str | None = None, project_name: str = "analysis") -> str:
+    """Escribe la salida estructurada del análisis a un .json (para skills/scripts)."""
+    if dest is None:
+        dest = f"{project_name}-{_timestamp()}.json"
+    Path(dest).write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
     return dest
 
 

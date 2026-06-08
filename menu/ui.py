@@ -2,6 +2,8 @@
 Helpers de Rich: paneles, tablas, spinners y formateo de resultados.
 """
 
+import sys
+
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -51,12 +53,17 @@ def print_header(project_path: str | None = None, n_modules: int = 0) -> None:
 
 @contextmanager
 def analysis_spinner(label: str):
-    """Context manager que muestra un spinner Rich mientras corre el análisis."""
+    """Context manager que muestra un spinner Rich mientras corre el análisis.
+
+    Usa un Console fijado al stdout real del momento. El análisis (en menu.actions)
+    redirige sys.stdout a un buffer para capturar logs; si el spinner siguiera ese
+    swap, sus frames irían al buffer y el timer se vería "congelado" en pantalla."""
+    live = Console(file=sys.stdout)
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
         TimeElapsedColumn(),
-        console=console,
+        console=live,
         transient=True,
     ) as progress:
         progress.add_task(f"[cyan]{label}[/cyan]")
@@ -68,13 +75,16 @@ def analysis_progress(label: str, total: int):
     """Context manager con barra de progreso para proyectos grandes (total > 10).
     Devuelve un callback on_progress(done, total) para actualizar la barra.
     Para proyectos pequeños usa un spinner simple sin callback.
-    """
+
+    Console fijado al stdout real (igual que analysis_spinner): durante el análisis
+    sys.stdout queda redirigido a un buffer y la barra no debe seguir ese swap."""
+    live = Console(file=sys.stdout)
     if total <= 10:
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             TimeElapsedColumn(),
-            console=console,
+            console=live,
             transient=True,
         ) as progress:
             progress.add_task(f"[cyan]{label}[/cyan]")
@@ -88,7 +98,7 @@ def analysis_progress(label: str, total: int):
         MofNCompleteColumn(),
         TextColumn("[cyan]{task.percentage:>3.0f}%[/cyan]"),
         TimeElapsedColumn(),
-        console=console,
+        console=live,
         transient=True,
     ) as progress:
         task = progress.add_task(f"[cyan]{label}[/cyan]", total=total)

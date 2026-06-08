@@ -504,17 +504,37 @@ class GradleDependencyAnalyzer:
 
         return "\n".join(lines)
 
-    def to_json_dict(self) -> dict:
+    def to_json_dict(self, focus=None) -> dict:
+        """Salida estructurada para skills/scripts. Respeta el foco y la profundidad:
+        con foco, `modules` y `dependencies` son el árbol enraizado (clausura hacia
+        abajo), igual que el reporte y el ASCII."""
+        eff  = self._effective_focus(focus)
+        view = set(self._focused_modules(eff)) if eff else set(self.modules)
+
+        cycles = self.detect_dependency_cycles()
+        if eff:
+            cycles = [c for c in cycles if view.intersection(c)]
+
+        deps_out: dict = {}
+        for m in sorted(view):
+            scoped = {}
+            for scope, deps in self.dependencies.get(m, {}).items():
+                kept = sorted(d for d in deps if d in view)
+                if kept:
+                    scoped[scope] = kept
+            if scoped:
+                deps_out[m] = scoped
+
         return {
+            "schema_version": 1,
+            "tool":    "internal",
             "path":    str(self.base_path),
             "root":    str(self.root),
-            "modules": self.modules,
-            "focus":   self.focus_modules,
-            "dependencies": {
-                m: {scope: list(deps) for scope, deps in scopes.items()}
-                for m, scopes in self.dependencies.items()
-            },
-            "cycles": self.detect_dependency_cycles(),
+            "focus":   list(eff) if eff else [],
+            "depth":   self.depth,
+            "modules": sorted(view),
+            "dependencies": deps_out,
+            "cycles":  cycles,
         }
 
     def save_all(self, output_dir="diagrams", fmt="all", focus=None):
@@ -540,6 +560,12 @@ class GradleDependencyAnalyzer:
             p = output_path / "gradle-dependencies.txt"
             p.write_text(self.generate_ascii(focus), encoding='utf-8')
             self._vprint(f"✓ ASCII: {p}")
+
+        if fmt in ('json', 'all'):
+            p = output_path / "gradle-dependencies.json"
+            p.write_text(json.dumps(self.to_json_dict(focus), indent=2, ensure_ascii=False),
+                         encoding='utf-8')
+            self._vprint(f"✓ JSON: {p}")
 
         p = output_path / "gradle-report.txt"
         p.write_text(self.generate_report(focus), encoding='utf-8')
@@ -580,7 +606,7 @@ def main():
         description='Analiza dependencias internas de módulos Android'
     )
     parser.add_argument('path')
-    parser.add_argument('--format', choices=['plantuml', 'mermaid', 'dot', 'ascii', 'all'],
+    parser.add_argument('--format', choices=['plantuml', 'mermaid', 'dot', 'ascii', 'json', 'all'],
                         default=None, dest='fmt', metavar='FORMAT')
     parser.add_argument('--output-dir', default=None, dest='output_dir', metavar='DIR')
     parser.add_argument('--exclude', action='append', default=[], metavar='MODULE')
@@ -621,7 +647,7 @@ def main():
     analyzer.save_all(output_dir=args.output_dir, fmt=args.fmt, focus=focus)
 
     if args.json:
-        print(json.dumps(analyzer.to_json_dict(), indent=2, ensure_ascii=False))
+        print(json.dumps(analyzer.to_json_dict(focus), indent=2, ensure_ascii=False))
     else:
         print("\n" + analyzer.generate_report(focus))
         if not args.quiet:

@@ -74,6 +74,20 @@ class TestSanityFocusInContext:
         assert callees == {"view", "pin"}          # a quién llamo (Ce=2)
 
 
+class TestSanityJsonOutput:
+
+    def test_save_report_writes_json(self, tmp_path):
+        import json as _json
+        a = GradleSanityAnalyzer(base_path=str(FIXTURES / "simple"), verbose=False)
+        a.analyze()
+        a.save_report(output_dir=str(tmp_path))
+        p = tmp_path / "sanity-report.json"
+        assert p.exists()
+        data = _json.loads(p.read_text(encoding="utf-8"))
+        assert data["schema_version"] == 1
+        assert data["tool"] == "sanity"
+
+
 class TestHardcodedVersions:
 
     def test_commented_version_not_detected(self):
