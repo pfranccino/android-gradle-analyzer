@@ -6,11 +6,10 @@ from pathlib import Path
 from collections import defaultdict
 
 from analyzer_utils import (
-    parse_settings_modules,
+    compute_scope,
     load_config,
     load_project_config,
     get_icon,
-    normalize_module_name,
     is_submodule_of,
     setup_utf8,
 )
@@ -21,6 +20,7 @@ class ExternalCallersAnalyzer:
     def __init__(self, project_root, target_module, config_path=None, verbose=True,
                  engine="static"):
         self.project_root   = Path(project_root)
+        self.root           = self.project_root
         self.target_module  = target_module
         self.config         = load_config(config_path)
         self.internal_modules = []
@@ -33,32 +33,17 @@ class ExternalCallersAnalyzer:
     def scan_all_modules(self):
         self._vprint(f"📁 Escaneando proyecto completo: {self.project_root}\n")
 
-        from_settings = parse_settings_modules(self.project_root)
-
-        if from_settings is not None:
-            for module_name in from_settings:
-                self.all_modules.append(module_name)
-                if is_submodule_of(module_name, self.target_module):
-                    self.internal_modules.append(module_name)
-                    self._vprint(f"  ✓ [INTERNO] {module_name}")
-                else:
-                    self._vprint(f"  ○ [EXTERNO] {module_name}")
-        else:
-            for gradle_file in sorted(self.project_root.rglob("build.gradle*")):
-                module_dir = gradle_file.parent
-                try:
-                    rel_path    = module_dir.relative_to(self.project_root)
-                    module_name = normalize_module_name(str(rel_path))
-                    if module_name == '.':
-                        continue
-                    self.all_modules.append(module_name)
-                    if is_submodule_of(module_name, self.target_module):
-                        self.internal_modules.append(module_name)
-                        self._vprint(f"  ✓ [INTERNO] {module_name}")
-                    else:
-                        self._vprint(f"  ○ [EXTERNO] {module_name}")
-                except ValueError:
-                    continue
+        # Siempre escaneamos desde la RAÍZ del proyecto (aunque se pase una
+        # subcarpeta), con nombres canónicos: si no, los llamadores externos
+        # (ej. ':app') quedarían fuera del scope y no se detectarían.
+        self.root, known, _focus = compute_scope(self.project_root)
+        for module_name in known:
+            self.all_modules.append(module_name)
+            if is_submodule_of(module_name, self.target_module):
+                self.internal_modules.append(module_name)
+                self._vprint(f"  ✓ [INTERNO] {module_name}")
+            else:
+                self._vprint(f"  ○ [EXTERNO] {module_name}")
 
         self._vprint(f"\n✓ Total módulos: {len(self.all_modules)}")
         self._vprint(f"✓ Módulos internos de {self.target_module}: {len(self.internal_modules)}")
@@ -71,7 +56,7 @@ class ExternalCallersAnalyzer:
         external_modules = [m for m in self.all_modules if not is_submodule_of(m, self.target_module)]
 
         resolved = self.engine.resolve(
-            self.project_root, external_modules, self.internal_modules,
+            self.root, external_modules, self.internal_modules,
         )
         for module, scoped_deps in resolved.items():
             for scope, targets in scoped_deps.items():

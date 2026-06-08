@@ -34,14 +34,20 @@ _HARDCODED_VERSION_RE = re.compile(
 
 
 class GradleSanityAnalyzer:
-    def __init__(self, base_path, config_path=None, verbose=True, engine="static"):
+    def __init__(self, base_path, config_path=None, verbose=True, engine="static",
+                 focus=None):
         self.base_path = Path(base_path)
         self.config    = load_config(config_path)
         self.weights   = self.config.get("sanity_weights", {})
         self._vprint   = print if verbose else (lambda *a, **k: None)
 
+        # El grafo (y por tanto Ca/Ce/I) se calcula SIEMPRE sobre el proyecto
+        # completo. `focus` solo centra el reporte y el score: así un módulo
+        # conserva su Ca real (sus llamadores cuentan aunque estén fuera del foco).
         self._dep = GradleDependencyAnalyzer(base_path, config_path, verbose=verbose,
-                                             engine=engine)
+                                             engine=engine, focus=focus)
+        self.focus_modules = []
+        self._focus_set    = set()
 
         self.ca          = {}
         self.ce          = {}
@@ -58,6 +64,11 @@ class GradleSanityAnalyzer:
     def analyze(self):
         self._dep.scan_modules()
         self._dep.analyze_gradle_dependencies()
+
+        # Foco = los módulos enfocados del grafo (subárbol o módulo elegido).
+        # Si abarca todo el proyecto, el reporte es el de siempre.
+        self.focus_modules = list(self._dep.focus_modules) or list(self._dep.modules)
+        self._focus_set    = set(self.focus_modules)
 
         self._compute_coupling()
         self._detect_sdp_violations()
@@ -226,27 +237,50 @@ class GradleSanityAnalyzer:
                 kind = "app" if is_app else "feature"
                 self.coupling_issues.append((module, kind, round(i, 2), ca, max_ca))
 
+    # ── Foco ────────────────────────────────────────────────────────────────────
+
+    def _focused_issues(self):
+        """Filtra las violaciones (detectadas sobre el grafo completo) a las que
+        tienen un módulo del foco como SUJETO. Con foco = proyecto, no filtra nada."""
+        fs = self._focus_set
+        return {
+            "cycles":   [c for c in self.cycles          if fs.intersection(c)],
+            "sdp":      [v for v in self.sdp_violations   if v[0] in fs],
+            "api":      [x for x in self.api_issues       if x[0] in fs],
+            "fan_out":  [x for x in self.fan_out_issues   if x[0] in fs],
+            "versions": [x for x in self.version_issues   if x[0] in fs],
+            "orphans":  [m for m in self.orphan_modules   if m in fs],
+            "coupling": [x for x in self.coupling_issues  if x[0] in fs],
+        }
+
+    @property
+    def is_focused(self):
+        """True si el foco es un subconjunto estricto del proyecto."""
+        return bool(self.focus_modules) and self._focus_set != set(self._dep.modules)
+
     # ── Score ─────────────────────────────────────────────────────────────────
 
     def compute_score(self):
         """
-        Calcula el score de sanidad (0–100).
+        Calcula el score de sanidad (0–100) sobre las violaciones del foco
+        (todas, si el foco es el proyecto completo).
         Los pesos NO son un estándar externo — son defaults razonables
         configurables en analyzer_config.json bajo 'sanity_weights'.
         """
         w     = self.weights
+        f     = self._focused_issues()
         score = 100
 
-        score -= len(self.cycles)         * w.get("cycle",             20)
-        score -= len(self.sdp_violations) * w.get("sdp_violation",     10)
-        score -= len(self.api_issues)     * w.get("unnecessary_api",    5)
-        score -= len(self.fan_out_issues) * w.get("high_fan_out_penalty", 3)
+        score -= len(f["cycles"])  * w.get("cycle",              20)
+        score -= len(f["sdp"])     * w.get("sdp_violation",      10)
+        score -= len(f["api"])     * w.get("unnecessary_api",     5)
+        score -= len(f["fan_out"]) * w.get("high_fan_out_penalty", 3)
 
-        version_count = sum(len(versions) for _, versions in self.version_issues)
+        version_count = sum(len(versions) for _, versions in f["versions"])
         score -= version_count * w.get("hardcoded_version", 2)
 
         limits = self.config.get("coupling_limits", {})
-        for _module, kind, _i, _ca, _max_ca in self.coupling_issues:
+        for _module, kind, _i, _ca, _max_ca in f["coupling"]:
             score -= limits.get("app_penalty", 0) if kind == "app" else limits.get("leaf_penalty", 0)
 
         return max(0, score)
@@ -256,7 +290,8 @@ class GradleSanityAnalyzer:
     def generate_report(self):
         score   = self.compute_score()
         w       = self.weights
-        modules = self._dep.modules
+        f       = self._focused_issues()
+        modules = sorted(self.focus_modules)
         SEP     = "=" * 70
         sep     = "─" * 70
 
@@ -265,9 +300,16 @@ class GradleSanityAnalyzer:
             "REPORTE DE SANIDAD DE DEPENDENCIAS GRADLE",
             SEP,
             f"\nRuta analizada : {self.base_path}",
-            f"Total módulos  : {len(modules)}",
-            "",
         ]
+        if self.is_focused:
+            lines += [
+                f"Foco           : {', '.join(modules)}",
+                f"Módulos foco   : {len(modules)}  (Ca/Ce/I medidos en el contexto"
+                f" del proyecto completo: {len(self._dep.modules)} módulos)",
+                "",
+            ]
+        else:
+            lines += [f"Total módulos  : {len(modules)}", ""]
 
         # ── Glosario ─────────────────────────────────────────────────────────
         lines += [
@@ -336,14 +378,14 @@ class GradleSanityAnalyzer:
 
         # — Ciclos
         penalty = w.get("cycle", 20)
-        lines.append(f"🔴 CICLOS ({len(self.cycles)})  —  -{penalty} pts c/u")
+        lines.append(f"🔴 CICLOS ({len(f['cycles'])})  —  -{penalty} pts c/u")
         lines.append(
             "   Un ciclo ocurre cuando A depende de B y B depende de A (directa o indirectamente).\n"
             "   Los ciclos hacen imposible compilar los módulos por separado y rompen\n"
             "   la modularización. Son el problema más grave en arquitectura de módulos."
         )
-        if self.cycles:
-            for cycle in self.cycles:
+        if f["cycles"]:
+            for cycle in f["cycles"]:
                 lines.append(f"   ⚠️  {' → '.join(cycle)}")
         else:
             lines.append("   Sin ciclos detectados ✅")
@@ -352,7 +394,7 @@ class GradleSanityAnalyzer:
         # — SDP
         penalty   = w.get("sdp_violation", 10)
         threshold = w.get("sdp_threshold", 0.3)
-        lines.append(f"🟠 VIOLACIONES SDP ({len(self.sdp_violations)})  —  -{penalty} pts c/u")
+        lines.append(f"🟠 VIOLACIONES SDP ({len(f['sdp'])})  —  -{penalty} pts c/u")
         lines.append(
             "   SDP = Stable Dependencies Principle (Principio de Dependencias Estables).\n"
             "   Regla: las dependencias deben apuntar hacia módulos más estables (I más bajo).\n"
@@ -361,8 +403,8 @@ class GradleSanityAnalyzer:
             "   Ejemplo violación : common (I=0.0) → home (I=0.8)  ⚠️  — common puede\n"
             "                       verse afectado por cada cambio en home."
         )
-        if self.sdp_violations:
-            for (frm, to, i_frm, i_to) in self.sdp_violations:
+        if f["sdp"]:
+            for (frm, to, i_frm, i_to) in f["sdp"]:
                 lines.append(f"   ⚠️  {frm} (I={i_frm:.2f}) → {to} (I={i_to:.2f})")
                 lines.append(f"       └─ {frm} es más estable que {to}, pero depende de él.")
         else:
@@ -371,15 +413,15 @@ class GradleSanityAnalyzer:
 
         # — Api innecesario
         penalty = w.get("unnecessary_api", 5)
-        lines.append(f"🟡 API INNECESARIO ({len(self.api_issues)})  —  -{penalty} pts c/u")
+        lines.append(f"🟡 API INNECESARIO ({len(f['api'])})  —  -{penalty} pts c/u")
         lines.append(
             "   El scope `api` expone dependencias a TODOS los módulos que dependen de este.\n"
             "   Si Ca = 0 (nadie depende de este módulo), ese alcance es completamente\n"
             "   innecesario y contamina el grafo de dependencias sin beneficio.\n"
             "   Solución: reemplazar `api` por `implementation`."
         )
-        if self.api_issues:
-            for (module, api_deps) in self.api_issues:
+        if f["api"]:
+            for (module, api_deps) in f["api"]:
                 lines.append(f"   ⚠️  {module}  (Ca=0, usa api para: {', '.join(sorted(api_deps))})")
         else:
             lines.append("   Sin problemas de api detectados ✅")
@@ -388,14 +430,14 @@ class GradleSanityAnalyzer:
         # — Fan-out
         threshold = w.get("high_fan_out_threshold", 5)
         penalty   = w.get("high_fan_out_penalty", 3)
-        lines.append(f"🟡 FAN-OUT EXCESIVO ({len(self.fan_out_issues)})  —  -{penalty} pts c/u")
+        lines.append(f"🟡 FAN-OUT EXCESIVO ({len(f['fan_out'])})  —  -{penalty} pts c/u")
         lines.append(
             f"   Un módulo con Ce > {threshold} depende de demasiados otros (umbral configurable).\n"
             "   Eso lo hace frágil: cualquier cambio en cualquiera de esos módulos puede\n"
             "   romperlo. Considerar agrupar dependencias o dividir el módulo."
         )
-        if self.fan_out_issues:
-            for (module, ce) in self.fan_out_issues:
+        if f["fan_out"]:
+            for (module, ce) in f["fan_out"]:
                 lines.append(f"   ⚠️  {module}  Ce={ce} (supera el umbral de {threshold})")
         else:
             lines.append("   Sin fan-out excesivo ✅")
@@ -403,7 +445,7 @@ class GradleSanityAnalyzer:
 
         # — Versiones hardcodeadas
         penalty = w.get("hardcoded_version", 2)
-        total_v = sum(len(v) for _, v in self.version_issues)
+        total_v = sum(len(v) for _, v in f["versions"])
         lines.append(f"🔵 VERSIONES HARDCODEADAS ({total_v})  —  -{penalty} pts c/u")
         lines.append(
             "   Versiones escritas directamente en build.gradle (ej: 'com.lib:x:1.2.3')\n"
@@ -412,8 +454,8 @@ class GradleSanityAnalyzer:
             "   consistente y puede generar conflictos entre módulos.\n"
             "   Solución: mover las versiones a libs.versions.toml."
         )
-        if self.version_issues:
-            for (module, versions) in self.version_issues:
+        if f["versions"]:
+            for (module, versions) in f["versions"]:
                 lines.append(f"   Módulo: {module}")
                 for v in versions:
                     lines.append(f"     └─ {v}")
@@ -421,14 +463,14 @@ class GradleSanityAnalyzer:
             lines.append("   Sin versiones hardcodeadas ✅")
         lines.append("")
 
-        lines.append(f"ℹ️  MÓDULOS HUÉRFANOS ({len(self.orphan_modules)})  —  sin penalización")
+        lines.append(f"ℹ️  MÓDULOS HUÉRFANOS ({len(f['orphans'])})  —  sin penalización")
         lines.append(
             "   Módulos sin dependencias entrantes (Ca=0) ni salientes (Ce=0).\n"
             "   Pueden ser features en desarrollo o candidatos a eliminar.\n"
             "   No se penalizan en el score — requieren revisión manual."
         )
-        if self.orphan_modules:
-            for module in sorted(self.orphan_modules):
+        if f["orphans"]:
+            for module in sorted(f["orphans"]):
                 lines.append(f"   ℹ️  {module}")
         else:
             lines.append("   Sin módulos huérfanos ✅")
@@ -442,15 +484,15 @@ class GradleSanityAnalyzer:
             pen_note = "informativo (sin penalización)"
         else:
             pen_note = f"feature -{leaf_pen} / app -{app_pen} pts"
-        lines.append(f"🟠 LÓGICA COMPARTIDA MAL UBICADA ({len(self.coupling_issues)})  —  {pen_note}")
+        lines.append(f"🟠 LÓGICA COMPARTIDA MAL UBICADA ({len(f['coupling'])})  —  {pen_note}")
         lines.append(
             "   Un \"módulo hoja\" (término de grafos para el extremo de I alto del árbol de\n"
             "   dependencias) — es decir, un feature o el punto de entrada de la app — del que\n"
             "   sin embargo OTROS dependen. Suele indicar código común atrapado arriba en lugar\n"
             "   de bajar a core/shared. La I baja de core/common los excluye automáticamente."
         )
-        if self.coupling_issues:
-            for (module, kind, i, ca, max_ca) in self.coupling_issues:
+        if f["coupling"]:
+            for (module, kind, i, ca, max_ca) in f["coupling"]:
                 etiqueta = "punto de entrada" if kind == "app" else "feature"
                 lines.append(f"   ⚠️  {module}  [{etiqueta}]  I={i:.2f}  Ca={ca} (límite: {max_ca})")
         else:
@@ -458,15 +500,15 @@ class GradleSanityAnalyzer:
         lines.append("")
 
         # ── Score ─────────────────────────────────────────────────────────────
-        n_cycles   = len(self.cycles)
-        n_sdp      = len(self.sdp_violations)
-        n_api      = len(self.api_issues)
-        n_fanout   = len(self.fan_out_issues)
-        n_versions = sum(len(v) for _, v in self.version_issues)
-        n_coupling   = len(self.coupling_issues)
+        n_cycles   = len(f["cycles"])
+        n_sdp      = len(f["sdp"])
+        n_api      = len(f["api"])
+        n_fanout   = len(f["fan_out"])
+        n_versions = sum(len(v) for _, v in f["versions"])
+        n_coupling   = len(f["coupling"])
         coupling_pts = sum(
             cl.get("app_penalty", 0) if kind == "app" else cl.get("leaf_penalty", 0)
-            for _m, kind, _i, _ca, _max in self.coupling_issues
+            for _m, kind, _i, _ca, _max in f["coupling"]
         )
 
         lines += [
@@ -519,8 +561,12 @@ class GradleSanityAnalyzer:
         self._vprint(f"✓ Reporte: {report_file}")
 
     def to_json_dict(self) -> dict:
+        f = self._focused_issues()
         return {
             "path":    str(self.base_path),
+            "root":    str(self._dep.root),
+            "focus":   list(self.focus_modules),
+            "context_modules": len(self._dep.modules),
             "score":   self.compute_score(),
             "modules": {
                 m: {
@@ -528,29 +574,29 @@ class GradleSanityAnalyzer:
                     "ce": self.ce.get(m, 0),
                     "I":  round(self.instability.get(m, 0.0), 2),
                 }
-                for m in self._dep.modules
+                for m in sorted(self.focus_modules)
             },
-            "cycles": [c for c in self.cycles],
+            "cycles": [c for c in f["cycles"]],
             "sdp_violations": [
                 {"from": frm, "to": to, "I_from": round(i_frm, 2), "I_to": round(i_to, 2)}
-                for frm, to, i_frm, i_to in self.sdp_violations
+                for frm, to, i_frm, i_to in f["sdp"]
             ],
             "api_issues": [
                 {"module": m, "api_deps": list(deps)}
-                for m, deps in self.api_issues
+                for m, deps in f["api"]
             ],
             "fan_out_issues": [
                 {"module": m, "ce": ce}
-                for m, ce in self.fan_out_issues
+                for m, ce in f["fan_out"]
             ],
             "version_issues": [
                 {"module": m, "versions": versions}
-                for m, versions in self.version_issues
+                for m, versions in f["versions"]
             ],
-            "orphan_modules": self.orphan_modules,
+            "orphan_modules": list(f["orphans"]),
             "coupling_issues": [
                 {"module": m, "kind": kind, "I": i, "ca": ca, "max_ca": max_ca}
-                for m, kind, i, ca, max_ca in self.coupling_issues
+                for m, kind, i, ca, max_ca in f["coupling"]
             ],
         }
 
@@ -564,6 +610,9 @@ def main():
         description='Mide la sanidad arquitectónica de las dependencias Gradle de un módulo Android'
     )
     parser.add_argument('path')
+    parser.add_argument('--focus',      default=None, metavar='MODULE[,MODULE]',
+                        help='Enfoca el reporte en estos módulos (Ca/Ce/I igual se miden '
+                             'en el contexto del proyecto completo)')
     parser.add_argument('--output-dir', default=None, dest='output_dir', metavar='DIR')
     parser.add_argument('--config',     default=None, metavar='PATH')
     parser.add_argument('--engine',     choices=['static', 'dynamic', 'auto'], default=None,
@@ -589,11 +638,13 @@ def main():
         print("🏥 Analizador de Sanidad de Dependencias Gradle")
         print("=" * 70)
 
+    focus = [m.strip() for m in args.focus.split(',')] if args.focus else None
     analyzer = GradleSanityAnalyzer(
         base_path=args.path,
         config_path=args.config,
         verbose=not args.quiet,
         engine=args.engine,
+        focus=focus,
     )
     try:
         analyzer.analyze()

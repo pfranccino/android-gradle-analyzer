@@ -54,7 +54,15 @@ def _get_project_and_modules(prompts, list_modules):
     path = prompts.ask_project_path()
     if not path:
         return None, []
-    return path, list_modules(path)
+    # Listar SIEMPRE el registry completo del proyecto (desde la raíz), aunque
+    # el usuario apunte a una subcarpeta: así puede elegir cualquier módulo como
+    # foco/target. El análisis se hace en contexto del proyecto completo.
+    try:
+        from analyzer_utils import compute_scope
+        _root, known, _focus = compute_scope(path)
+        return path, known
+    except Exception:
+        return path, list_modules(path)
 
 
 def _handle_export(last_result, prompts, ui, console,
@@ -292,20 +300,29 @@ def _action_sanity(last_result, deps):
      prompts, actions, ui, to_html, to_pdf, to_markdown, to_zip, PDF_AVAILABLE,
      open_plantuml_online, render_plantuml_local, list_modules) = deps
 
-    path, _ = _get_project_and_modules(prompts, list_modules)
+    path, modules = _get_project_and_modules(prompts, list_modules)
     if not path:
         return last_result
+
+    # Foco opcional: un módulo/subárbol (Ca/Ce/I se miden igual en el contexto
+    # del proyecto completo) o todo el proyecto.
+    focus_answer = prompts.ask_focus(modules)
+    if focus_answer == prompts.BACK:
+        return last_result
+    focus = [focus_answer] if focus_answer else None
+
     engine = prompts.ask_engine()
     if not engine:
         return last_result
-    with ui.analysis_spinner("Calculando métricas de sanidad..."):
-        result = actions.run_sanity(path=path, output_dir="sanity", engine=engine)
+    label = f"Calculando sanidad de '{focus_answer}'..." if focus_answer else "Calculando métricas de sanidad..."
+    with ui.analysis_spinner(label):
+        result = actions.run_sanity(path=path, output_dir="sanity", engine=engine, focus=focus)
     if result["ok"]:
         outputs = result.get("outputs", [])
         ui.print_outputs_panel(outputs)
         ui.print_metrics_table(result.get("metrics", {}), score=result.get("score"))
         ui.print_summary(result.get("summary", ""))
-        add_history_entry(path, None, "sanity", outputs)
+        add_history_entry(path, focus_answer, "sanity", outputs)
         set_last_project(path)
         ctx = {"summary": result.get("summary", ""),
                "project_name": "sanity", "mermaid_path": None}

@@ -25,9 +25,11 @@ def setup_utf8() -> None:
 # ─── Detección de módulos ──────────────────────────────────────────────────
 
 _INCLUDE_RE = re.compile(r'["\'](:?[\w:/-]+)["\']')
-# `include` como palabra completa: matchea `include(...)` / `include '...'` pero
-# NO `includeBuild` ni identificadores como `includedFeatures`.
-_INCLUDE_KW = re.compile(r'\binclude\b')
+# Detecta una llamada `include(...)` o `include '...'` real: la palabra `include`
+# seguida (tras espacios opcionales) de '(' o de una comilla. Así NO matchea
+# `includeBuild`, identificadores como `includedFeatures`, ni la palabra
+# "include" embebida en un string (ej. rootProject.name = "include-this").
+_INCLUDE_CALL = re.compile(r'\binclude\s*[("\']')
 
 
 def _join_statements(content: str) -> list:
@@ -57,7 +59,7 @@ def _join_statements(content: str) -> list:
         if depth < 0:
             depth = 0
         joined = ' '.join(buf)
-        if depth > 0 or (line.endswith(',') and _INCLUDE_KW.search(joined)):
+        if depth > 0 or (line.endswith(',') and _INCLUDE_CALL.search(joined)):
             continue
         statements.append(joined)
         buf = []
@@ -74,12 +76,16 @@ def _extract_includes(settings_path) -> list:
     content = _strip_comments(Path(settings_path).read_text(encoding='utf-8'))
     modules: list = []
     for stmt in _join_statements(content):
-        if not _INCLUDE_KW.search(stmt) or 'includeBuild' in stmt:
-            continue
-        for match in _INCLUDE_RE.finditer(stmt):
-            normalized = normalize_module_name(match.group(1).lstrip(':'))
-            if normalized and normalized not in modules:
-                modules.append(normalized)
+        # Un statement lógico puede agrupar varias sentencias separadas por ';'
+        # (ej. include(":a"); rootProject.name = "x"). Se procesa cada una por
+        # separado para no capturar strings de sentencias vecinas como módulos.
+        for clause in stmt.split(';'):
+            if not _INCLUDE_CALL.search(clause) or 'includeBuild' in clause:
+                continue
+            for match in _INCLUDE_RE.finditer(clause):
+                normalized = normalize_module_name(match.group(1).lstrip(':'))
+                if normalized and normalized not in modules:
+                    modules.append(normalized)
     return modules
 
 
@@ -132,6 +138,40 @@ def list_modules(base_path) -> list:
 
 def normalize_module_name(path: str) -> str:
     return path.replace('/', ':').replace('\\', ':')
+
+
+def compute_scope(base_path):
+    """Resuelve (root, known_modules, focus_modules) para una ruta dada.
+
+    - root:          raíz del proyecto Gradle (carpeta con settings.gradle) o
+                     base_path si no hay ninguna por encima.
+    - known_modules: registry completo del proyecto, nombres canónicos
+                     (relativos a root). Sin settings.gradle se escanea por
+                     carpetas desde root.
+    - focus_modules: subconjunto de known_modules cuyo directorio cae bajo
+                     base_path (todos si base_path == root). Define en qué
+                     enfocar la salida.
+
+    Permite que "pasar una subcarpeta" y "pasar la raíz + elegir un módulo"
+    resuelvan al mismo contexto: el grafo se arma siempre desde la raíz y el
+    foco solo centra la salida, sin distorsionar el cálculo (ej. el Ca de un
+    módulo cuenta a sus llamadores aunque vivan fuera del subárbol).
+    """
+    base_path = Path(base_path).resolve()
+    root      = find_project_root(base_path)
+    known     = parse_settings_modules(root)
+    if known is None:
+        known = list_modules(root)   # fallback por carpetas (root == base_path)
+
+    focus = []
+    for module in known:
+        module_dir = root / module.replace(':', '/')
+        try:
+            module_dir.relative_to(base_path)
+        except ValueError:
+            continue                 # fuera del subárbol enfocado
+        focus.append(module)
+    return root, known, focus
 
 
 def find_gradle_file(module_path: Path) -> Path | None:
