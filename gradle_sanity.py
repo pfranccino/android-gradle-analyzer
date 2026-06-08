@@ -258,6 +258,22 @@ class GradleSanityAnalyzer:
         """True si el foco es un subconjunto estricto del proyecto."""
         return bool(self.focus_modules) and self._focus_set != set(self._dep.modules)
 
+    def _neighbors(self, module):
+        """(llamadores, llamados) de `module` en el grafo COMPLETO.
+        - llamadores (Ca): quién depende de este módulo.
+        - llamados (Ce):  de qué módulos depende este."""
+        deps = self._dep.dependencies
+        callees = set()
+        for scope_deps in deps.get(module, {}).values():
+            callees |= scope_deps
+        callers = set()
+        for other in self._dep.modules:
+            for scope_deps in deps.get(other, {}).values():
+                if module in scope_deps:
+                    callers.add(other)
+                    break
+        return callers, callees
+
     # ── Score ─────────────────────────────────────────────────────────────────
 
     def compute_score(self):
@@ -367,6 +383,32 @@ class GradleSanityAnalyzer:
             lines.append(f"  {module:<30} {ca:>4}  {ce:>4}  {i:>6.2f}  {estado}")
 
         lines.append("")
+
+        # ── Vecinos del foco (ambas direcciones) ──────────────────────────────
+        # Con foco mostramos, por módulo, quién lo llama (Ca) y a quién llama (Ce),
+        # medido sobre el grafo completo. Sin foco se omite (sería todo el grafo).
+        if self.is_focused:
+            lines += [
+                SEP,
+                "DEPENDENCIAS DEL FOCO — AMBAS DIRECCIONES",
+                SEP,
+                "",
+            ]
+            for module in sorted(self.focus_modules):
+                callers, callees = self._neighbors(module)
+                ca = self.ca.get(module, 0)
+                ce = self.ce.get(module, 0)
+                i  = self.instability.get(module, 0.0)
+                lines.append(f"  📦 {module}   (Ca={ca}  Ce={ce}  I={i:.2f})")
+                lines.append(
+                    f"     ← te llaman ({len(callers)}): " +
+                    (", ".join(sorted(callers)) if callers else "nadie")
+                )
+                lines.append(
+                    f"     → vos llamás a ({len(callees)}): " +
+                    (", ".join(sorted(callees)) if callees else "nada")
+                )
+                lines.append("")
 
         # ── Violaciones ───────────────────────────────────────────────────────
         lines += [

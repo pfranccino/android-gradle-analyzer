@@ -5,10 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-06-08
+
 ### Changed
 - **Dependencias internas ahora es un árbol enraizado en el módulo elegido.** Al enfocar un módulo (ej. `customer:customer-account-recovery`) la salida muestra **solo lo que ese módulo usa, recursivamente** (clausura hacia abajo), en vez de incluir a sus llamadores y volcar toda la lista de dependencias de `app`. "Quién me llama" pasa a ser exclusivamente la función de Llamadas externas. Como el conjunto es cerrado bajo "depende de", la vista nunca arrastra módulos ajenos al foco
 - El reporte ASCII de internas se renderiza como **árbol anidado** real (antes era plano de un nivel), con dedup de subárboles repetidos (`↩`) y corte de ciclos
 - **Llamadas externas ahora es simétrico a internas: el cono transitivo de llamadores.** Antes mostraba solo los llamadores directos (1 salto); ahora responde "de qué parte del proyecto te llaman" recursivamente. Una sola resolución del grafo deriva los llamadores directos (con scope, como antes) y el cono transitivo por niveles; el reporte agrega la sección "Cadena de llamadores"
+- **Sanidad enfocada muestra ambas direcciones.** Al enfocar un módulo (o un directorio), el reporte agrega la sección "Dependencias del foco — ambas direcciones": para cada módulo del foco, quién lo llama (Ca) y a quién llama (Ce), medido sobre el grafo completo. Las métricas Ca/Ce/I siguen calculándose en el contexto del proyecto entero
 
 ### Added
 - Flag `--depth N|all` en `gradle-analyzer` y `gradle-externals` (y selector de profundidad en el menú): limita cuántos niveles se recorren — las "internas de sus internas" hacia abajo, y el cono de llamadores hacia arriba (default: `all`)
