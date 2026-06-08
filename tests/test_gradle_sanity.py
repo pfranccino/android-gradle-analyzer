@@ -67,8 +67,8 @@ class TestSanityFocusInContext:
         a.analyze()
         report = a.generate_report()
         assert "DEPENDENCIAS DEL FOCO" in report
-        assert "te llaman" in report
-        assert "vos llamás a" in report
+        assert "← lo llaman" in report
+        assert "→ depende de" in report
         callers, callees = a._neighbors("grp:sub-a")
         assert callers == {"app", "grp:sub-b"}     # quién me llama (Ca=2)
         assert callees == {"view", "pin"}          # a quién llamo (Ce=2)

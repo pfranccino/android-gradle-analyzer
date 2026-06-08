@@ -401,11 +401,11 @@ class GradleSanityAnalyzer:
                 i  = self.instability.get(module, 0.0)
                 lines.append(f"  📦 {module}   (Ca={ca}  Ce={ce}  I={i:.2f})")
                 lines.append(
-                    f"     ← te llaman ({len(callers)}): " +
+                    f"     ← lo llaman ({len(callers)}): " +
                     (", ".join(sorted(callers)) if callers else "nadie")
                 )
                 lines.append(
-                    f"     → vos llamás a ({len(callees)}): " +
+                    f"     → depende de ({len(callees)}): " +
                     (", ".join(sorted(callees)) if callees else "nada")
                 )
                 lines.append("")
