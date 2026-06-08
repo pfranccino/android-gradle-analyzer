@@ -5,6 +5,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-06-07
+
+### Fixed
+- **"No detecta nada" en proyectos con `include` multilínea**: el parser de `settings.gradle(.kts)` leía línea por línea y descartaba toda línea sin la palabra `include`, por lo que el formato Kotlin DSL moderno —`include(` … `":app",` … `":core",` … `)`— devolvía **0 módulos**. Y como el `settings.gradle` sí existía pero quedaba vacío, el análisis no caía al escaneo por carpetas y reportaba cero dependencias. Ahora `_extract_includes` une statements lógicos (paréntesis abiertos + coma de continuación Groovy) y elimina comentarios antes de matchear. Cubre: `include()` multilínea con y sin coma final, listas Groovy multilínea, `listOf(...).forEach { include(it) }`, varios módulos por `include(...)`, semicolons, CRLF/tabs e `include (...)` con espacio
+- **Falsos positivos en la detección de módulos**: dependencias dentro de bloques comentados `/* ... */` se contaban como módulos, e identificadores como `val includedFeatures = ...` también (matcheo por substring `include`). Ahora se usa `\binclude\b`, que excluye además `includeBuild` de forma natural
+- **Fallback robusto cuando `settings.gradle` no declara módulos parseables**: `parse_settings_modules` devuelve `None` (en vez de lista vacía) para que los tres analizadores (`gradle-analyzer`, `gradle-impact`, `gradle-externals`) caigan al escaneo por carpetas en lugar de reportar "0 módulos" silenciosamente
+- Nueva clase de test `TestExtractIncludesFormats` (13 casos) sobre los formatos Kotlin DSL y Groovy de `settings.gradle`, incluyendo los antifalsos-positivos y un settings a escala de monorepo con `include("...")` con paréntesis, sin `:` inicial y anidamiento profundo
+
 ### Changed
 - **Documentación**: README reescrito y reducido (~270 líneas) con salida **real** de los CLIs y un diagrama Mermaid que GitHub renderiza en vivo. El detalle (referencia de comandos, métricas de sanidad, motores, configuración, CI, internals y troubleshooting) se movió al [Wiki](https://github.com/pfranccino/android-gradle-analyzer/wiki) como única fuente de verdad. `EXAMPLES.md` actualizado a los CLIs actuales con salida real y reproducible contra `tests/fixtures/`
 

@@ -25,18 +25,58 @@ def setup_utf8() -> None:
 # ─── Detección de módulos ──────────────────────────────────────────────────
 
 _INCLUDE_RE = re.compile(r'["\'](:?[\w:/-]+)["\']')
+# `include` como palabra completa: matchea `include(...)` / `include '...'` pero
+# NO `includeBuild` ni identificadores como `includedFeatures`.
+_INCLUDE_KW = re.compile(r'\binclude\b')
+
+
+def _join_statements(content: str) -> list:
+    """Agrupa el contenido en statements lógicos, uniendo continuaciones.
+
+    Un statement de include puede abarcar varias líneas de dos formas:
+
+        include(                 include ':app',
+            ":app",       ←→             ':core'     ←→  paréntesis abierto
+            ":core",                                     o coma final (Groovy)
+        )
+
+    Se une mientras haya paréntesis abiertos, o mientras la línea termine en
+    coma y el buffer ya contenga la palabra `include` (lista Groovy multilínea).
+    Así `listOf(...).forEach { include(it) }` y los include() multilínea de
+    Kotlin DSL quedan en una sola línea lógica antes de aplicar el regex.
+    """
+    statements: list = []
+    buf: list = []
+    depth = 0
+    for line in content.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        buf.append(line)
+        depth += line.count('(') - line.count(')')
+        if depth < 0:
+            depth = 0
+        joined = ' '.join(buf)
+        if depth > 0 or (line.endswith(',') and _INCLUDE_KW.search(joined)):
+            continue
+        statements.append(joined)
+        buf = []
+        depth = 0
+    if buf:
+        statements.append(' '.join(buf))
+    return statements
 
 
 def _extract_includes(settings_path) -> list:
-    content = Path(settings_path).read_text(encoding='utf-8')
-    modules = []
-    for line in content.splitlines():
-        stripped = line.strip()
-        if stripped.startswith(('//', '*', '/*')) or 'include' not in stripped:
+    # Quitar comentarios primero: un /* ... */ multilínea o un // pueden
+    # contener includes "apagados" que no deben contarse, y además sus
+    # paréntesis falsearían el conteo de profundidad al unir statements.
+    content = _strip_comments(Path(settings_path).read_text(encoding='utf-8'))
+    modules: list = []
+    for stmt in _join_statements(content):
+        if not _INCLUDE_KW.search(stmt) or 'includeBuild' in stmt:
             continue
-        if 'includeBuild' in stripped:
-            continue
-        for match in _INCLUDE_RE.finditer(stripped):
+        for match in _INCLUDE_RE.finditer(stmt):
             normalized = normalize_module_name(match.group(1).lstrip(':'))
             if normalized and normalized not in modules:
                 modules.append(normalized)
@@ -48,7 +88,10 @@ def parse_settings_modules(base_path) -> list | None:
     for filename in ("settings.gradle.kts", "settings.gradle"):
         settings = base / filename
         if settings.exists():
-            return _extract_includes(settings)
+            # Si el settings existe pero no extrajimos módulos parseables,
+            # devolvemos None para que el caller caiga al escaneo por carpetas
+            # (rglob) en lugar de reportar "0 módulos" silenciosamente.
+            return _extract_includes(settings) or None
     return None
 
 
