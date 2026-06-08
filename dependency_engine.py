@@ -105,6 +105,11 @@ gradle.projectsEvaluated {
     rootProject.allprojects.each { project ->
         def byScope = [:]
         project.configurations.each { cfg ->
+            // Solo configuraciones declarables (implementation, api, testImplementation,
+            // kapt, ...). Saltar las resolvables que AGP deriva por variante
+            // (*CompileClasspath / *RuntimeClasspath): heredan las deps de los buckets
+            // y duplican cada arista una vez por flavor/buildType.
+            try { if (cfg.canBeResolved) return } catch (Throwable ignored) {}
             try {
                 cfg.dependencies.withType(ProjectDependency).each { dep ->
                     String path
@@ -181,9 +186,16 @@ class DynamicEngine:
                 out[module] = filtered
         return out
 
+    # Sufijos de las configuraciones resolvables derivadas por AGP. El init script
+    # ya las descarta (cfg.canBeResolved); esto es la red de seguridad por si una
+    # versión de Gradle las dejara pasar — colapsa la explosión por flavor/buildType.
+    _NOISE_SCOPE_SUFFIXES = ("CompileClasspath", "RuntimeClasspath")
+
     @staticmethod
     def _normalize_raw(raw: dict) -> dict:
-        """Pasa los paths de Gradle (':a:b') a la convención interna ('a:b')."""
+        """Pasa los paths de Gradle (':a:b') a la convención interna ('a:b') y
+        descarta las configuraciones resolvables derivadas (*CompileClasspath /
+        *RuntimeClasspath), que duplican cada arista por variante."""
         norm: dict = {}
         for gpath, scopes in raw.items():
             module = _norm(gpath)
@@ -191,6 +203,8 @@ class DynamicEngine:
                 continue
             by_scope: dict = {}
             for scope, targets in scopes.items():
+                if scope.endswith(DynamicEngine._NOISE_SCOPE_SUFFIXES):
+                    continue
                 deps = {_norm(t) for t in targets}
                 deps.discard('')
                 if deps:

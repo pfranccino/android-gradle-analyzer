@@ -109,6 +109,30 @@ class TestDynamicEngineMapping:
         )
         assert "" not in result
 
+    def test_drops_resolvable_classpath_scopes(self):
+        """Reproduce la explosión de scopes de un proyecto con flavors: el JSON de
+        Gradle trae la misma dep en implementation + una config resolvable por flavor
+        (*UnitTestCompileClasspath / *RuntimeClasspath). Solo debe quedar el bucket
+        declarable, sin duplicar la arista por variante."""
+        raw = {
+            ":customer:customer-account-recovery": {
+                "implementation":                  [":view"],
+                "AutomationUnitTestCompileClasspath": [":view"],
+                "DevUnitTestCompileClasspath":        [":view"],
+                "ProdUnitTestCompileClasspath":       [":view"],
+                "StagingUnitTestCompileClasspath":    [":view"],
+                "debugRuntimeClasspath":              [":view"],
+            },
+        }
+        eng = self._engine_with(raw)
+        result = eng.resolve(
+            ".", modules=["customer:customer-account-recovery"],
+            known_modules=["customer:customer-account-recovery", "view"],
+        )
+        scopes = result["customer:customer-account-recovery"]
+        assert set(scopes.keys()) == {"implementation"}
+        assert scopes["implementation"] == {"view"}
+
 
 # ── DynamicEngine: wrapper y errores ──────────────────────────────────────────
 

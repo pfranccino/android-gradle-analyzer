@@ -121,3 +121,54 @@ class TestExternalCallersAmbiguousLeaf:
     def test_common_root_is_external_not_internal(self, analyzer):
         """:common (raíz) no es submódulo de target — debe ser externo."""
         assert "common" not in analyzer.internal_modules
+
+
+class TestExternalCallerCone:
+    """Cono de llamadores transitivo (externas simétrico a internas): quién llama al
+    módulo, recursivo, con --depth. Cadena: target ← b ← c ← d ← app."""
+
+    def _chain(self, root: Path):
+        (root / "settings.gradle").write_text(
+            "include ':target'\ninclude ':b'\ninclude ':c'\n"
+            "include ':d'\ninclude ':app'\n", encoding="utf-8")
+
+        def mod(path, body):
+            p = root / path
+            p.mkdir(parents=True, exist_ok=True)
+            (p / "build.gradle").write_text(body, encoding="utf-8")
+
+        mod("target", "dependencies {}")
+        mod("b",      "dependencies { implementation project(':target') }")
+        mod("c",      "dependencies { implementation project(':b') }")
+        mod("d",      "dependencies { implementation project(':c') }")
+        mod("app",    "dependencies { implementation project(':d') }")
+
+    def _analyzer(self, root, depth=None):
+        a = ExternalCallersAnalyzer(project_root=str(root), target_module="target",
+                                    verbose=False, depth=depth)
+        a.scan_all_modules()
+        a.analyze_external_calls()
+        return a
+
+    def test_cone_all_levels(self, tmp_path):
+        self._chain(tmp_path)
+        a = self._analyzer(tmp_path)
+        assert a.caller_levels == {"b": 1, "c": 2, "d": 3, "app": 4}
+
+    def test_cone_depth_one_direct_only(self, tmp_path):
+        self._chain(tmp_path)
+        a = self._analyzer(tmp_path, depth=1)
+        assert a.caller_levels == {"b": 1}
+
+    def test_direct_callers_still_have_scopes(self, tmp_path):
+        """El contrato previo se mantiene: el llamador directo conserva su scope."""
+        self._chain(tmp_path)
+        a = self._analyzer(tmp_path)
+        assert a.external_callers["b"]["target"] == {"implementation"}
+
+    def test_report_shows_transitive_chain(self, tmp_path):
+        self._chain(tmp_path)
+        a = self._analyzer(tmp_path)
+        report = a.generate_report()
+        assert "CADENA DE LLAMADORES" in report
+        assert "Nivel 4" in report

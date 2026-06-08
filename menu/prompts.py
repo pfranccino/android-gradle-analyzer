@@ -226,21 +226,21 @@ def ask_focus(modules: list[str]) -> str | None:
     _ALL = "__all__"
 
     if len(modules) > 15:
-        all_choices = ["📦  Todos los módulos"] + modules + ["← Volver"]
+        all_choices = ["📦  Proyecto completo"] + modules + ["← Volver"]
         answer = questionary.autocomplete(
-            "Módulo focal (Enter = todos los módulos):",
+            "Módulo a analizar (Enter = proyecto completo):",
             choices=all_choices,
-            default="📦  Todos los módulos",
+            default="📦  Proyecto completo",
             style=_STYLE,
         ).ask()
         if answer is None or answer == "← Volver":
             return BACK
-        if answer == "📦  Todos los módulos":
+        if answer == "📦  Proyecto completo":
             return None
         return answer if answer in modules else None
 
     choices = [
-        questionary.Choice("📦  Todos los módulos", value=_ALL),
+        questionary.Choice("📦  Proyecto completo", value=_ALL),
         questionary.Separator(),
     ]
     for m in modules:
@@ -248,7 +248,7 @@ def ask_focus(modules: list[str]) -> str | None:
     choices += [questionary.Separator(), questionary.Choice("← Volver", value=BACK)]
 
     answer = questionary.select(
-        "¿Hacer zoom en un módulo? (o ver todos):",
+        "¿Qué módulo analizar? (o todo el proyecto):",
         choices=choices,
         style=_STYLE,
         use_shortcuts=False,
@@ -260,6 +260,28 @@ def ask_focus(modules: list[str]) -> str | None:
     if answer == _ALL:
         return None
     return answer
+
+
+def ask_depth(question: str = "Profundidad del árbol (niveles de 'internas de sus internas'):") -> object:
+    """Profundidad de un recorrido (árbol de internas o cono de llamadores).
+    Devuelve None (todas, recursivo), un int, o BACK para cancelar."""
+    answer = questionary.select(
+        question,
+        choices=[
+            questionary.Choice("Todas  (recursivo hasta las hojas)", value="all"),
+            questionary.Choice("1  (solo dependencias directas)",    value="1"),
+            questionary.Choice("2",                                  value="2"),
+            questionary.Choice("3",                                  value="3"),
+            questionary.Separator(),
+            questionary.Choice("← Volver",                           value=BACK),
+        ],
+        style=_STYLE,
+        use_shortcuts=False,
+        instruction="(↑↓  ↵ elegir  Esc cancelar)",
+    ).ask()
+    if answer is None or answer == BACK:
+        return BACK
+    return None if answer == "all" else int(answer)
 
 
 # ── Pedir formatos de export ──────────────────────────────────────────────────

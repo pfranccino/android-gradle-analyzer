@@ -95,6 +95,21 @@ def analysis_progress(label: str, total: int):
         yield lambda done, _total: progress.update(task, completed=done)
 
 
+# ── Aviso del motor dinámico ───────────────────────────────────────────────────
+
+def print_dynamic_warning(engine: str) -> None:
+    """Avisa que el motor dinámico/auto ejecuta la configuración de Gradle y, en
+    proyectos grandes, bloquea la terminal por varios minutos. No-op para static."""
+    if engine not in ("dynamic", "auto"):
+        return
+    console.print(Panel(
+        "[yellow]⚠ Motor dinámico:[/yellow] se va a ejecutar la configuración de "
+        "Gradle del proyecto.\nEn proyectos grandes esto puede tardar "
+        "[bold]varios minutos[/bold]; la terminal queda bloqueada mientras corre.",
+        border_style="yellow", padding=(0, 1),
+    ))
+
+
 # ── Tabla de módulos con métricas ─────────────────────────────────────────────
 
 def print_metrics_table(metrics: dict, score: int | None = None) -> None:

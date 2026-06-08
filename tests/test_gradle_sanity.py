@@ -59,6 +59,20 @@ class TestSanityFocusInContext:
         # 'app' está en el contexto pero NO debe ser una fila del reporte enfocado
         assert "\n  app " not in report
 
+    def test_report_shows_both_directions(self, tmp_path):
+        """Con foco, el reporte muestra para el módulo ambas direcciones:
+        quién lo llama (Ca) y a quién llama (Ce), sobre el grafo completo."""
+        self._project(tmp_path)
+        a = GradleSanityAnalyzer(base_path=str(tmp_path), focus=["grp:sub-a"], verbose=False)
+        a.analyze()
+        report = a.generate_report()
+        assert "DEPENDENCIAS DEL FOCO" in report
+        assert "← lo llaman" in report
+        assert "→ depende de" in report
+        callers, callees = a._neighbors("grp:sub-a")
+        assert callers == {"app", "grp:sub-b"}     # quién me llama (Ca=2)
+        assert callees == {"view", "pin"}          # a quién llamo (Ce=2)
+
 
 class TestHardcodedVersions:
 
