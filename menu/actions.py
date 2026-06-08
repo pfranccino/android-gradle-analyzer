@@ -168,9 +168,13 @@ def run_sanity(
     output_dir: str = "sanity",
     config: str | None = None,
     engine: str = "static",
+    focus: list[str] | None = None,
 ) -> dict:
     """
     Calcula métricas de sanidad (Ca/Ce/I, SDP, score 0-100).
+
+    Si `focus` se indica, el reporte y el score se centran en esos módulos,
+    pero Ca/Ce/I se miden en el contexto del proyecto completo.
 
     Returns:
         dict con ok (bool), outputs (list[str]), summary (str), score (int)
@@ -178,7 +182,8 @@ def run_sanity(
     from gradle_sanity import GradleSanityAnalyzer
 
     try:
-        analyzer = GradleSanityAnalyzer(base_path=path, config_path=config, engine=engine)
+        analyzer = GradleSanityAnalyzer(base_path=path, config_path=config,
+                                        engine=engine, focus=focus)
 
         def _run():
             analyzer.analyze()
@@ -192,14 +197,15 @@ def run_sanity(
         summary = analyzer.generate_report()
         score   = analyzer.compute_score()
 
-        # métricas por módulo: {module: {ca, ce, instability}}
+        # métricas por módulo enfocado: {module: {ca, ce, instability}}
+        focus_modules = analyzer.focus_modules
         metrics = {
             m: {
                 "ca": analyzer.ca.get(m, 0),
                 "ce": analyzer.ce.get(m, 0),
                 "I":  round(analyzer.instability.get(m, 0.0), 2),
             }
-            for m in analyzer._dep.modules
+            for m in focus_modules
         }
 
         return {
@@ -208,7 +214,7 @@ def run_sanity(
             "summary": summary,
             "score":   score,
             "metrics": metrics,
-            "modules": analyzer._dep.modules,
+            "modules": focus_modules,
             "log":     log,
         }
     except Exception as exc:

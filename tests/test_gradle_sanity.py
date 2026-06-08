@@ -4,6 +4,62 @@ from gradle_sanity import GradleSanityAnalyzer
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
+class TestSanityFocusInContext:
+    """Sanidad enfocada en un subárbol/módulo: Ca/Ce/I se miden en el contexto
+    del proyecto COMPLETO (no aislando el subárbol). El reporte y el score se
+    centran en el foco, pero las métricas son las reales del proyecto."""
+
+    def _project(self, root: Path):
+        (root / "settings.gradle.kts").write_text(
+            'include("app")\ninclude("view")\ninclude("pin")\n'
+            'include("grp:sub-a")\ninclude("grp:sub-b")\n', encoding="utf-8")
+
+        def mod(path, body):
+            d = root / path
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "build.gradle.kts").write_text(body, encoding="utf-8")
+
+        mod("app",       'dependencies {\n  implementation(project(":grp:sub-a"))\n  implementation(project(":view"))\n}')
+        mod("view",      'dependencies {}')
+        mod("pin",       'dependencies {}')
+        mod("grp/sub-a", 'dependencies {\n  implementation(project(":view"))\n  implementation(project(":pin"))\n}')
+        mod("grp/sub-b", 'dependencies {\n  implementation(project(":grp:sub-a"))\n}')
+
+    def test_ca_counts_external_callers_when_focused(self, tmp_path):
+        """grp:sub-a tiene Ca=2 (app + grp:sub-b) tanto en la raíz como enfocando
+        en grp/ — el llamador externo `app` NO se pierde al enfocar el subárbol."""
+        self._project(tmp_path)
+
+        full = GradleSanityAnalyzer(base_path=str(tmp_path), verbose=False)
+        full.analyze()
+
+        sub = GradleSanityAnalyzer(base_path=str(tmp_path / "grp"), verbose=False)
+        sub.analyze()
+
+        assert sub.ca["grp:sub-a"] == full.ca["grp:sub-a"] == 2
+        assert round(sub.instability["grp:sub-a"], 2) == 0.5
+        # El reporte se centra en el subárbol
+        assert set(sub.focus_modules) == {"grp:sub-a", "grp:sub-b"}
+        assert sub.is_focused
+
+    def test_explicit_focus_param(self, tmp_path):
+        self._project(tmp_path)
+        a = GradleSanityAnalyzer(base_path=str(tmp_path), focus=["grp:sub-a"], verbose=False)
+        a.analyze()
+        assert set(a.focus_modules) == {"grp:sub-a"}
+        assert a.ca["grp:sub-a"] == 2          # contexto completo
+
+    def test_report_focused_shows_only_focus_rows(self, tmp_path):
+        self._project(tmp_path)
+        a = GradleSanityAnalyzer(base_path=str(tmp_path / "grp"), verbose=False)
+        a.analyze()
+        report = a.generate_report()
+        assert "grp:sub-a" in report
+        assert "Foco" in report
+        # 'app' está en el contexto pero NO debe ser una fila del reporte enfocado
+        assert "\n  app " not in report
+
+
 class TestHardcodedVersions:
 
     def test_commented_version_not_detected(self):

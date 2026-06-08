@@ -13,6 +13,7 @@ from analyzer_utils import (
     detect_cycles,
     parse_settings_modules,
     list_modules,
+    compute_scope,
     module_to_accessor,
     build_accessor_map,
     _preprocess_groovy,
@@ -488,6 +489,51 @@ class TestExtractIncludesFormats:
         self._write(tmp_path, "settings.gradle.kts",
             'pluginManagement {\n    includeBuild("build-logic")\n}\n')
         assert parse_settings_modules(tmp_path) is None
+
+
+# ── compute_scope: raíz / subárbol / módulo ───────────────────────────────────
+
+class TestComputeScope:
+    """compute_scope separa contexto (raíz + registry completo) del foco
+    (módulos bajo base_path). Base del modelo "foco + contexto completo"."""
+
+    def _project(self, root):
+        (root / "settings.gradle.kts").write_text(
+            'include("app")\ninclude("view")\ninclude("grp:sub-a")\ninclude("grp:sub-b")\n',
+            encoding="utf-8")
+        for p in ("app", "view", "grp/sub-a", "grp/sub-b"):
+            d = root / p
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "build.gradle.kts").write_text("dependencies {}", encoding="utf-8")
+
+    def test_scope_root(self, tmp_path):
+        self._project(tmp_path)
+        root, known, focus = compute_scope(tmp_path)
+        assert root == tmp_path.resolve()
+        assert set(known) == {"app", "view", "grp:sub-a", "grp:sub-b"}
+        assert set(focus) == set(known)   # raíz → foco = todo
+
+    def test_scope_subtree(self, tmp_path):
+        self._project(tmp_path)
+        root, known, focus = compute_scope(tmp_path / "grp")
+        assert root == tmp_path.resolve()                 # contexto = raíz
+        assert set(known) == {"app", "view", "grp:sub-a", "grp:sub-b"}
+        assert set(focus) == {"grp:sub-a", "grp:sub-b"}   # foco = subárbol
+
+    def test_scope_single_module(self, tmp_path):
+        self._project(tmp_path)
+        root, known, focus = compute_scope(tmp_path / "grp" / "sub-a")
+        assert set(focus) == {"grp:sub-a"}
+        assert "app" in known                              # registry completo intacto
+
+    def test_scope_no_settings_falls_back_to_rglob(self, tmp_path):
+        for p in ("app", "core"):
+            d = tmp_path / p
+            d.mkdir()
+            (d / "build.gradle").write_text("dependencies {}", encoding="utf-8")
+        root, known, focus = compute_scope(tmp_path)
+        assert set(known) == {"app", "core"}
+        assert set(focus) == {"app", "core"}
 
 
 # ── _preprocess_groovy / _strip_comments ──────────────────────────────────────

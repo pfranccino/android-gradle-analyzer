@@ -86,14 +86,16 @@ class TestGradleDependencyAnalyzer:
         assert "app" in focused
         assert "core" in focused
 
-    def test_focus_excludes_unrelated(self):
+    def test_focus_includes_direct_callers(self):
+        """Vista enfocada "en contexto": enfocar en core incluye a su llamador app
+        (app depende de core), para mostrar el módulo con quién lo usa."""
         analyzer = GradleDependencyAnalyzer(base_path=str(FIXTURES / "simple"))
         analyzer.scan_modules()
         analyzer.analyze_gradle_dependencies()
 
         focused = analyzer._focused_modules(["core"])
         assert "core" in focused
-        assert "app" not in focused
+        assert "app" in focused   # llamador directo de core
 
     def test_resolves_type_safe_accessors_end_to_end(self):
         """
@@ -113,10 +115,10 @@ class TestGradleDependencyAnalyzer:
 
 
 class TestSubtreeAnalysis:
-    """Analizar un SUBÁRBOL (no la raíz) debe usar los nombres CANÓNICOS de los
-    módulos (relativos a la raíz, con prefijo de grupo), no relativos a la carpeta
-    apuntada. Si no, ':grupo:hijo' se vería como 'hijo' y los edges internos del
-    subárbol se perderían (síntoma: "no detecta nada")."""
+    """Modelo "foco + contexto completo": apuntar a un subárbol construye el grafo
+    COMPLETO del proyecto (modules) con nombres canónicos, y enfoca la salida en el
+    subárbol (focus_modules). Así el Ca/llamadores externos no se pierden y los nombres
+    coinciden con los project(":grupo:hijo") declarados."""
 
     def _make_project(self, root: Path):
         (root / "settings.gradle.kts").write_text(
@@ -134,14 +136,13 @@ class TestSubtreeAnalysis:
         mod("grp/sub-a", 'dependencies {\n  implementation(project(":view"))\n  implementation(project(":pin"))\n}')
         mod("grp/sub-b", 'dependencies {\n  implementation(project(":grp:sub-a"))\n}')
 
-    def test_subtree_uses_canonical_names(self, tmp_path):
+    def test_subtree_focus_with_full_context(self, tmp_path):
         self._make_project(tmp_path)
         a = GradleDependencyAnalyzer(base_path=str(tmp_path / "grp"), verbose=False)
         a.scan_modules()
-        # Nombres completos con prefijo de grupo, NO 'sub-a' / 'sub-b'
-        assert set(a.modules) == {"grp:sub-a", "grp:sub-b"}
-        # El registry completo (known_modules) sigue siendo el de la raíz
-        assert "app" in a.known_modules
+        # Contexto = proyecto completo; foco = el subárbol (nombres canónicos)
+        assert set(a.modules) == {"app", "view", "pin", "grp:sub-a", "grp:sub-b"}
+        assert set(a.focus_modules) == {"grp:sub-a", "grp:sub-b"}
 
     def test_subtree_preserves_internal_edge(self, tmp_path):
         self._make_project(tmp_path)
@@ -150,15 +151,26 @@ class TestSubtreeAnalysis:
         a.analyze_gradle_dependencies()
         # El edge interno del subárbol (sub-b -> grp:sub-a) se conserva
         assert "grp:sub-a" in a.dependencies["grp:sub-b"].get("implementation", set())
-        # Y las deps hacia afuera del subárbol también se detectan (nombres canónicos)
-        assert "view" in a.dependencies["grp:sub-a"].get("implementation", set())
+        # Y como el grafo es completo, también se ve que 'app' (fuera del subárbol) lo usa
+        assert "grp:sub-a" in a.dependencies["app"].get("implementation", set())
+
+    def test_subtree_focused_view_includes_callers(self, tmp_path):
+        """La vista enfocada del subárbol incluye a sus llamadores directos (app)."""
+        self._make_project(tmp_path)
+        a = GradleDependencyAnalyzer(base_path=str(tmp_path / "grp"), verbose=False)
+        a.scan_modules()
+        a.analyze_gradle_dependencies()
+        view = a._focused_modules(a.focus_modules)
+        assert "app" in view          # llamador directo de grp:sub-a
+        assert "view" in view         # dependencia de grp:sub-a
 
     def test_root_analysis_unchanged(self, tmp_path):
-        """Analizar la raíz completa sigue detectando todos los módulos."""
+        """Analizar la raíz completa: modules = todos, foco = todos (sin zoom)."""
         self._make_project(tmp_path)
         a = GradleDependencyAnalyzer(base_path=str(tmp_path), verbose=False)
         a.scan_modules()
         assert set(a.modules) == {"app", "view", "pin", "grp:sub-a", "grp:sub-b"}
+        assert a._effective_focus() is None   # raíz → sin foco
 
 
 class TestFindGradleFile:

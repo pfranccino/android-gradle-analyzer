@@ -6,11 +6,10 @@ from pathlib import Path
 from collections import defaultdict, deque
 
 from analyzer_utils import (
-    parse_settings_modules,
+    compute_scope,
     load_config,
     load_project_config,
     get_icon,
-    normalize_module_name,
     setup_utf8,
 )
 from dependency_engine import get_engine, EngineError
@@ -20,6 +19,7 @@ class ImpactAnalyzer:
     def __init__(self, project_root, target_module, config_path=None, verbose=True,
                  engine="static"):
         self.project_root  = Path(project_root)
+        self.root          = self.project_root
         self.target_module = target_module
         self.config        = load_config(config_path)
         self.all_modules   = []
@@ -32,27 +32,17 @@ class ImpactAnalyzer:
     def scan_and_build_graph(self):
         self._vprint(f"📁 Escaneando proyecto: {self.project_root}\n")
 
-        from_settings = parse_settings_modules(self.project_root)
-
-        if from_settings is not None:
-            self.all_modules = list(from_settings)
-        else:
-            for gradle_file in sorted(self.project_root.rglob("build.gradle*")):
-                module_dir = gradle_file.parent
-                try:
-                    rel_path    = module_dir.relative_to(self.project_root)
-                    module_name = normalize_module_name(str(rel_path))
-                    if module_name == "." or module_name in self.all_modules:
-                        continue
-                    self.all_modules.append(module_name)
-                except ValueError:
-                    continue
+        # Grafo invertido sobre el proyecto COMPLETO (desde la raíz, nombres
+        # canónicos): así el impacto de un módulo alcanza a todos sus
+        # dependientes aunque se pase una subcarpeta como ruta.
+        self.root, known, _focus = compute_scope(self.project_root)
+        self.all_modules = list(known)
 
         self._vprint(f"✓ {len(self.all_modules)} módulos encontrados\n")
         self._vprint(f"🔍 Construyendo grafo invertido (motor: {self.engine_name})...")
 
         resolved = self.engine.resolve(
-            self.project_root, self.all_modules, self.all_modules,
+            self.root, self.all_modules, self.all_modules,
         )
         for module, scoped in resolved.items():
             for scope_deps in scoped.values():

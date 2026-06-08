@@ -140,6 +140,40 @@ def normalize_module_name(path: str) -> str:
     return path.replace('/', ':').replace('\\', ':')
 
 
+def compute_scope(base_path):
+    """Resuelve (root, known_modules, focus_modules) para una ruta dada.
+
+    - root:          raíz del proyecto Gradle (carpeta con settings.gradle) o
+                     base_path si no hay ninguna por encima.
+    - known_modules: registry completo del proyecto, nombres canónicos
+                     (relativos a root). Sin settings.gradle se escanea por
+                     carpetas desde root.
+    - focus_modules: subconjunto de known_modules cuyo directorio cae bajo
+                     base_path (todos si base_path == root). Define en qué
+                     enfocar la salida.
+
+    Permite que "pasar una subcarpeta" y "pasar la raíz + elegir un módulo"
+    resuelvan al mismo contexto: el grafo se arma siempre desde la raíz y el
+    foco solo centra la salida, sin distorsionar el cálculo (ej. el Ca de un
+    módulo cuenta a sus llamadores aunque vivan fuera del subárbol).
+    """
+    base_path = Path(base_path).resolve()
+    root      = find_project_root(base_path)
+    known     = parse_settings_modules(root)
+    if known is None:
+        known = list_modules(root)   # fallback por carpetas (root == base_path)
+
+    focus = []
+    for module in known:
+        module_dir = root / module.replace(':', '/')
+        try:
+            module_dir.relative_to(base_path)
+        except ValueError:
+            continue                 # fuera del subárbol enfocado
+        focus.append(module)
+    return root, known, focus
+
+
 def find_gradle_file(module_path: Path) -> Path | None:
     for name in ("build.gradle.kts", "build.gradle"):
         p = module_path / name

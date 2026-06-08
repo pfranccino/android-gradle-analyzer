@@ -6,14 +6,12 @@ from pathlib import Path
 from collections import defaultdict
 
 from analyzer_utils import (
-    parse_settings_modules,
-    find_project_root,
+    compute_scope,
     load_config,
     load_project_config,
     get_icon,
     get_style,
     detect_cycles,
-    normalize_module_name,
     setup_utf8,
 )
 from dependency_engine import get_engine, EngineError
@@ -37,13 +35,15 @@ _DOT_COLORS = {
 
 class GradleDependencyAnalyzer:
     def __init__(self, base_path, config_path=None, exclude=None, verbose=True,
-                 engine="static"):
+                 engine="static", focus=None):
         self.base_path     = Path(base_path).resolve()
         self.root          = self.base_path
         self.config        = load_config(config_path)
         self.exclude       = set(exclude or [])
-        self.modules       = []
+        self._init_focus   = list(focus) if focus else None
+        self.modules       = []          # registry COMPLETO (nodos del grafo, contexto)
         self.known_modules = []
+        self.focus_modules = []          # subconjunto a enfocar en la salida
         self.dependencies  = defaultdict(lambda: defaultdict(set))
         self.module_paths  = {}
         self._vprint       = print if verbose else (lambda *a, **k: None)
@@ -57,59 +57,42 @@ class GradleDependencyAnalyzer:
             print("❌ Error: La ruta no existe")
             return self
 
-        # La raíz del proyecto (donde vive settings.gradle) define el registry
-        # completo y los nombres CANÓNICOS de los módulos (relativos a la raíz).
-        self.root    = find_project_root(self.base_path)
-        root_modules = parse_settings_modules(self.root)
+        # El grafo se construye SIEMPRE sobre el proyecto completo (contexto),
+        # con nombres canónicos relativos a la raíz. `focus` solo centra la
+        # salida; no altera el cálculo (un módulo conserva su Ca real porque
+        # sus llamadores —aunque vivan fuera del subárbol— siguen en el grafo).
+        self.root, known, subtree = compute_scope(self.base_path)
+        self.known_modules = list(known)
+        self.modules       = [m for m in sorted(known) if m not in self.exclude]
 
-        if root_modules:
-            self.known_modules = root_modules
-            # Módulos a analizar = los del registry cuyo directorio cae bajo
-            # base_path. Si base_path == raíz, son todos. Se conserva el nombre
-            # COMPLETO (relativo a la raíz) para que coincida con los
-            # project(":a:b") declarados — clave al analizar un subárbol: sin
-            # esto el módulo ':grupo:hijo' se vería como 'hijo' y los edges
-            # internos del subárbol se perderían.
-            for module_name in sorted(root_modules):
-                module_dir = self.root / module_name.replace(':', '/')
-                try:
-                    module_dir.relative_to(self.base_path)
-                except ValueError:
-                    continue  # fuera del subárbol analizado
-                if module_name in self.exclude:
-                    self._vprint(f"  ⊘ {module_name} (excluido)")
-                    continue
-                self.modules.append(module_name)
-                self.module_paths[module_name] = module_dir.relative_to(self.root)
-                self._vprint(f"  • {module_name}")
-            if self.root != self.base_path:
-                self._vprint(
-                    f"\n📡 Raíz detectada: {self.root}"
-                    f" ({len(self.known_modules)} módulos conocidos,"
-                    f" {len(self.modules)} bajo '{self.base_path.name}')"
-                )
-        else:
-            # Sin settings.gradle en ninguna carpeta superior: escaneo por
-            # carpetas desde base_path (nombres relativos a base_path).
-            for gradle_file in sorted(self.base_path.rglob("build.gradle*")):
-                module_dir = gradle_file.parent
-                try:
-                    rel_path = module_dir.relative_to(self.base_path)
-                except ValueError:
-                    continue
-                module_name = str(rel_path).replace('/', ':').replace('\\', ':')
-                if module_name == '.':
-                    continue
-                if module_name in self.exclude:
-                    self._vprint(f"  ⊘ {module_name} (excluido)")
-                    continue
-                self.modules.append(module_name)
-                self.module_paths[module_name] = rel_path
-                self._vprint(f"  • {module_name}")
-            self.known_modules = list(self.modules)
+        # Foco efectivo: explícito (param) si se pasó, si no el subárbol bajo base_path.
+        focus_src = self._init_focus if self._init_focus is not None else subtree
+        focus_set = set(focus_src)
+        self.focus_modules = [m for m in self.modules if m in focus_set]
+
+        for module_name in self.modules:
+            self.module_paths[module_name] = Path(module_name.replace(':', '/'))
+            self._vprint(f"  • {module_name}")
+
+        if self.focus_modules and set(self.focus_modules) != set(self.modules):
+            self._vprint(
+                f"\n📡 Contexto: {len(self.modules)} módulos del proyecto"
+                f" (raíz {self.root}) · foco: {len(self.focus_modules)}"
+            )
 
         self._vprint(f"\n✓ {len(self.modules)} módulos encontrados\n")
         return self
+
+    def _effective_focus(self, focus=None):
+        """Devuelve la lista de módulos foco a usar en la salida, o None (=todos).
+
+        Prioridad: foco explícito del llamador > foco por subárbol/param de la
+        instancia. Si el foco abarca todo el proyecto, devuelve None (sin zoom)."""
+        if focus:
+            return list(focus) if isinstance(focus, (list, tuple, set)) else [focus]
+        if self.focus_modules and set(self.focus_modules) != set(self.modules):
+            return list(self.focus_modules)
+        return None
 
     def analyze_gradle_dependencies(self, on_progress=None):
         self._vprint(f"🔍 Analizando dependencias (motor: {self.engine_name})...")
@@ -139,8 +122,14 @@ class GradleDependencyAnalyzer:
         return detect_cycles(self.dependencies)
 
     def _focused_modules(self, focus_list):
+        """Vecindario del foco: los módulos foco + todo lo que usan (downstream
+        transitivo) + sus llamadores directos (1 salto upstream). Así la vista
+        enfocada muestra el módulo "en contexto": qué usa y quién lo usa."""
+        focus   = [m for m in focus_list if m in self.modules]
         visited = set()
-        queue   = [m for m in focus_list if m in self.modules]
+
+        # Downstream: lo que el foco usa, transitivo.
+        queue = list(focus)
         while queue:
             m = queue.pop()
             if m in visited:
@@ -150,6 +139,16 @@ class GradleDependencyAnalyzer:
                 for dep in scope_deps:
                     if dep not in visited:
                         queue.append(dep)
+
+        # Upstream: llamadores directos del foco (quién depende de él).
+        focus_set = set(focus)
+        for mod in self.modules:
+            deps = set()
+            for scope_deps in self.dependencies.get(mod, {}).values():
+                deps |= scope_deps
+            if deps & focus_set:
+                visited.add(mod)
+
         return [m for m in self.modules if m in visited]
 
     def _compile_deps(self, module):
@@ -174,7 +173,8 @@ class GradleDependencyAnalyzer:
         return result
 
     def generate_plantuml(self, focus=None):
-        modules       = self._focused_modules(focus) if focus else self.modules
+        eff_focus     = self._effective_focus(focus)
+        modules       = self._focused_modules(eff_focus) if eff_focus else self.modules
         package_name  = self.base_path.name
         cycles        = self.detect_dependency_cycles()
         cycle_modules = {m for cycle in cycles for m in cycle}
@@ -224,7 +224,8 @@ class GradleDependencyAnalyzer:
         return "\n".join(lines)
 
     def generate_mermaid(self, focus=None):
-        modules       = self._focused_modules(focus) if focus else self.modules
+        eff_focus     = self._effective_focus(focus)
+        modules       = self._focused_modules(eff_focus) if eff_focus else self.modules
         package_name  = self.base_path.name
         pkg_id        = package_name.replace('-', '_')
         cycles        = self.detect_dependency_cycles()
@@ -295,7 +296,8 @@ class GradleDependencyAnalyzer:
         return "\n".join(lines)
 
     def generate_dot(self, focus=None):
-        modules       = self._focused_modules(focus) if focus else self.modules
+        eff_focus     = self._effective_focus(focus)
+        modules       = self._focused_modules(eff_focus) if eff_focus else self.modules
         package_name  = self.base_path.name
         cycles        = self.detect_dependency_cycles()
         cycle_modules = {m for cycle in cycles for m in cycle}
@@ -350,7 +352,8 @@ class GradleDependencyAnalyzer:
         return "\n".join(lines)
 
     def generate_ascii(self, focus=None):
-        modules   = self._focused_modules(focus) if focus else self.modules
+        eff_focus = self._effective_focus(focus)
+        modules   = self._focused_modules(eff_focus) if eff_focus else self.modules
         known_set = set(self.known_modules) if self.known_modules else set(modules)
         name      = self.base_path.name
         width     = 70
@@ -386,12 +389,20 @@ class GradleDependencyAnalyzer:
 
         return "\n".join(lines)
 
-    def generate_report(self):
+    def generate_report(self, focus=None):
+        eff            = self._effective_focus(focus)
+        report_modules = self._focused_modules(eff) if eff else self.modules
+        report_set     = set(report_modules)
+        focus_set      = set(eff) if eff else report_set
+
         cycles = self.detect_dependency_cycles()
+        if eff:
+            cycles = [c for c in cycles if report_set.intersection(c)]
+
         total_deps = sum(
             len(mods)
-            for scopes in self.dependencies.values()
-            for mods in scopes.values()
+            for m in report_modules
+            for mods in self.dependencies.get(m, {}).values()
         )
 
         lines = [
@@ -399,9 +410,14 @@ class GradleDependencyAnalyzer:
             "REPORTE DE DEPENDENCIAS - ANÁLISIS DESDE GRADLE",
             "=" * 70,
             f"\nRuta: {self.base_path}",
-            f"Total de módulos: {len(self.modules)}",
-            f"Total de dependencias: {total_deps}",
         ]
+        if eff:
+            lines.append(f"Foco: {', '.join(sorted(focus_set))}")
+            lines.append(f"Módulos en vista (foco + vecinos): {len(report_modules)}"
+                         f"  ·  proyecto completo: {len(self.modules)}")
+        else:
+            lines.append(f"Total de módulos: {len(self.modules)}")
+        lines.append(f"Total de dependencias: {total_deps}")
 
         if cycles:
             lines.append("\n" + "=" * 70)
@@ -414,9 +430,10 @@ class GradleDependencyAnalyzer:
         lines.append("DEPENDENCIAS POR MÓDULO")
         lines.append("=" * 70)
 
-        for module in sorted(self.modules):
+        for module in sorted(report_modules):
             scoped = self.dependencies.get(module, {})
-            lines.append(f"\n📦 {module}")
+            marca  = "  ◀ foco" if (eff and module in focus_set) else ""
+            lines.append(f"\n📦 {module}{marca}")
             if scoped:
                 for scope in sorted(scoped.keys()):
                     for dep in sorted(scoped[scope]):
@@ -428,30 +445,31 @@ class GradleDependencyAnalyzer:
         lines.append("ESTADÍSTICAS")
         lines.append("=" * 70)
 
+        # Conteo de uso dentro de la vista (foco + vecinos).
         usage_count: dict = defaultdict(int)
-        for scopes in self.dependencies.values():
-            for deps in scopes.values():
+        for m in report_modules:
+            for deps in self.dependencies.get(m, {}).values():
                 for dep in deps:
-                    usage_count[dep] += 1
+                    if dep in report_set:
+                        usage_count[dep] += 1
 
         if usage_count:
             lines.append("\nMódulos más utilizados:")
             for module, count in sorted(usage_count.items(), key=lambda x: x[1], reverse=True):
                 lines.append(f"  • {module}: usado por {count} módulo(s)")
 
-        no_deps = [m for m in self.modules if not self.dependencies.get(m)]
+        no_deps = [m for m in report_modules if not self.dependencies.get(m)]
         if no_deps:
             lines.append(f"\nMódulos sin dependencias internas ({len(no_deps)}):")
             for module in sorted(no_deps):
                 lines.append(f"  • {module}")
 
-        is_subset = bool(self.known_modules) and set(self.known_modules) != set(self.modules)
-        unused = [m for m in self.modules if m not in usage_count]
+        unused = [m for m in report_modules if m not in usage_count]
         if unused:
-            if is_subset:
+            if eff:
                 lines.append(
-                    f"\nℹ️  No se detectaron dependencias entrantes en el scope analizado ({len(unused)} módulo(s))."
-                    "\n   Para ver qué módulos del proyecto dependen de estos, usá \"Llamadas externas\"."
+                    f"\nℹ️  Sin dependencias entrantes dentro de la vista ({len(unused)} módulo(s))."
+                    "\n   Para ver quién del proyecto completo depende de estos, usá \"Llamadas externas\"."
                 )
             else:
                 lines.append(f"\nMódulos no utilizados por otros ({len(unused)}):")
@@ -463,7 +481,9 @@ class GradleDependencyAnalyzer:
     def to_json_dict(self) -> dict:
         return {
             "path":    str(self.base_path),
+            "root":    str(self.root),
             "modules": self.modules,
+            "focus":   self.focus_modules,
             "dependencies": {
                 m: {scope: list(deps) for scope, deps in scopes.items()}
                 for m, scopes in self.dependencies.items()
@@ -496,7 +516,7 @@ class GradleDependencyAnalyzer:
             self._vprint(f"✓ ASCII: {p}")
 
         p = output_path / "gradle-report.txt"
-        p.write_text(self.generate_report(), encoding='utf-8')
+        p.write_text(self.generate_report(focus), encoding='utf-8')
         self._vprint(f"✓ Reporte: {p}")
 
 
@@ -560,7 +580,7 @@ def main():
     if args.json:
         print(json.dumps(analyzer.to_json_dict(), indent=2, ensure_ascii=False))
     else:
-        print("\n" + analyzer.generate_report())
+        print("\n" + analyzer.generate_report(focus))
         if not args.quiet:
             print("\n" + "=" * 70)
             print("✅ ¡Análisis completado!")

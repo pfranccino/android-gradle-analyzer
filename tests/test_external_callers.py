@@ -12,6 +12,35 @@ from external_callers import ExternalCallersAnalyzer
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
+class TestExternalCallersFromSubfolder:
+    """Pasar una SUBCARPETA como project_root debe igual escanear desde la raíz
+    y encontrar a los llamadores externos (ej. app) que viven fuera del subárbol."""
+
+    def _project(self, root: Path):
+        (root / "settings.gradle.kts").write_text(
+            'include("app")\ninclude("view")\ninclude("grp:sub-a")\ninclude("grp:sub-b")\n',
+            encoding="utf-8")
+
+        def mod(path, body):
+            d = root / path
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "build.gradle.kts").write_text(body, encoding="utf-8")
+
+        mod("app",       'dependencies {\n  implementation(project(":grp:sub-a"))\n}')
+        mod("view",      'dependencies {}')
+        mod("grp/sub-a", 'dependencies {\n  implementation(project(":view"))\n}')
+        mod("grp/sub-b", 'dependencies {\n  implementation(project(":grp:sub-a"))\n}')
+
+    def test_subfolder_path_finds_external_caller(self, tmp_path):
+        self._project(tmp_path)
+        a = ExternalCallersAnalyzer(
+            project_root=str(tmp_path / "grp"), target_module="grp:sub-a", verbose=False)
+        a.scan_all_modules()
+        a.analyze_external_calls()
+        assert "app" in a.external_callers          # llamador fuera del subárbol
+        assert "grp:sub-b" in a.external_callers
+
+
 class TestExternalCallersAnalyzer:
 
     @pytest.fixture
