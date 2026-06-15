@@ -36,6 +36,7 @@ env/
 # Output directories
 diagrams/
 external-calls/
+impact/
 sanity/
 *.png
 *.pdf
