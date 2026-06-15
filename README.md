@@ -212,7 +212,7 @@ All analyses accept `--engine static|dynamic|auto` (default `static`).
 
 > ⚠️ **Security:** `--engine dynamic` executes the analyzed project's build. Use it only on trusted repos. The `static` engine (default) never executes anything: it only reads text.
 
-Full details, guarantees, and examples in **[Static vs Dynamic Engine](https://github.com/pfranccino/android-gradle-analyzer/wiki/Motor-estatico-vs-dinamico)** (wiki).
+Full details, guarantees, and examples in **[Static vs Dynamic Engine](https://github.com/pfranccino/android-gradle-analyzer/wiki/Static-vs-Dynamic-Engine)** (wiki).
 
 ---
 
@@ -228,7 +228,7 @@ gradle-sanity /path/to/project --fail-on-cycle --fail-on-score-below 70 --quiet
 gradle-sanity /path/to/project --json > sanity-report.json
 ```
 
-Ready-to-copy workflow in **[CI Integration](https://github.com/pfranccino/android-gradle-analyzer/wiki/Integracion-CI)** (wiki) and in [`examples/github-actions-dependency-health.yml`](examples/github-actions-dependency-health.yml).
+Ready-to-copy workflow in **[CI Integration](https://github.com/pfranccino/android-gradle-analyzer/wiki/CI-Integration)** (wiki) and in [`examples/github-actions-dependency-health.yml`](examples/github-actions-dependency-health.yml).
 
 ---
 
@@ -238,12 +238,12 @@ The deep-dive lives in the **[Wiki](https://github.com/pfranccino/android-gradle
 
 | Page | Content |
 |---|---|
-| **[Commands](https://github.com/pfranccino/android-gradle-analyzer/wiki/Comandos)** | All 4 CLIs: flags, generated files, and real output for each |
-| **[Sanity metrics](https://github.com/pfranccino/android-gradle-analyzer/wiki/Metricas-de-sanidad)** | Ca/Ce/I, what the score detects, and references (Uncle Bob, ADP/SDP/SAP) |
-| **[Static vs Dynamic Engine](https://github.com/pfranccino/android-gradle-analyzer/wiki/Motor-estatico-vs-dinamico)** | When to use each and their guarantees |
-| **[Configuration](https://github.com/pfranccino/android-gradle-analyzer/wiki/Configuracion)** | `analyzer_config.json`, `analyzer.yml`, and the coupling detector |
-| **[CI Integration](https://github.com/pfranccino/android-gradle-analyzer/wiki/Integracion-CI)** | Gates, JSON, and GitHub Actions |
-| **[How it works](https://github.com/pfranccino/android-gradle-analyzer/wiki/Como-funciona)** | Module detection, extraction, and diagram generation |
+| **[Commands](https://github.com/pfranccino/android-gradle-analyzer/wiki/Commands)** | All 4 CLIs: flags, generated files, and real output for each |
+| **[Sanity metrics](https://github.com/pfranccino/android-gradle-analyzer/wiki/Sanity-Metrics)** | Ca/Ce/I, what the score detects, and references (Uncle Bob, ADP/SDP/SAP) |
+| **[Static vs Dynamic Engine](https://github.com/pfranccino/android-gradle-analyzer/wiki/Static-vs-Dynamic-Engine)** | When to use each and their guarantees |
+| **[Configuration](https://github.com/pfranccino/android-gradle-analyzer/wiki/Configuration)** | `analyzer_config.json`, `analyzer.yml`, and the coupling detector |
+| **[CI Integration](https://github.com/pfranccino/android-gradle-analyzer/wiki/CI-Integration)** | Gates, JSON, and GitHub Actions |
+| **[How it works](https://github.com/pfranccino/android-gradle-analyzer/wiki/How-it-works)** | Module detection, extraction, and diagram generation |
 | **[Troubleshooting](https://github.com/pfranccino/android-gradle-analyzer/wiki/Troubleshooting)** | Common problems and solutions |
 
 Looking for end-to-end recipes (audit, onboarding, safe refactor)? → **[EXAMPLES.md](EXAMPLES.md)**.
